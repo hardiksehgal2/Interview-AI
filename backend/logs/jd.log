@@ -1,0 +1,6 @@
+20:18:45 Worker rq:worker:f97b906af4344966a1c1cee6b5b54ccb started with PID 81215, version 2.3.3
+20:18:45 Subscribing to channel rq:pubsub:f97b906af4344966a1c1cee6b5b54ccb
+20:18:45 *** Listening on jd_analysis...
+20:18:45 Cleaning registries for queue: jd_analysis
+20:19:34 Worker f97b906af4344966a1c1cee6b5b54ccb [PID 81215]: warm shut down requested
+20:19:34 Unsubscribing from channel rq:pubsub:f97b906af4344966a1c1cee6b5b54ccb

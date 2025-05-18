@@ -1,0 +1,6 @@
+20:18:45 Worker rq:worker:72ef8c06de3a40d8bf55f6aae984584b started with PID 81217, version 2.3.3
+20:18:45 Subscribing to channel rq:pubsub:72ef8c06de3a40d8bf55f6aae984584b
+20:18:45 *** Listening on question_generator...
+20:18:45 Cleaning registries for queue: question_generator
+20:19:34 Worker 72ef8c06de3a40d8bf55f6aae984584b [PID 81217]: warm shut down requested
+20:19:34 Unsubscribing from channel rq:pubsub:72ef8c06de3a40d8bf55f6aae984584b
