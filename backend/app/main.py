@@ -1,4 +1,3 @@
-# backend/app/main.py
 from .server import app
 
 
