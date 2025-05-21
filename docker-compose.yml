@@ -4,6 +4,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: ai-frontend
+    restart: unless-stopped
     ports:
       - "3000:3000"       # localhost:3000
     depends_on:
@@ -15,7 +16,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: ai-backend
-    
+    restart: unless-stopped
     ports:
       - "8000:8000"       # localhost:8000
     
