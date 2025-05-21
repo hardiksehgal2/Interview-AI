@@ -15,7 +15,7 @@ interface Job {
 
 // Words for typewriter effect
 const words = [
-    { text: "Apply Now 🎊", className: "text-2xl lg:text-4xl text-center font-extrabold" },
+    { text: "Apply Now ", className: "text-2xl lg:text-4xl text-center font-extrabold" },
 ];
 
 export default function JobsListing() {

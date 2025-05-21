@@ -1,6 +1,0 @@
-20:18:45 Worker rq:worker:6d3bcc1b761c4f5f9aab574c6595161c started with PID 81216, version 2.3.3
-20:18:45 Subscribing to channel rq:pubsub:6d3bcc1b761c4f5f9aab574c6595161c
-20:18:45 *** Listening on resume_matching...
-20:18:45 Cleaning registries for queue: resume_matching
-20:19:34 Worker 6d3bcc1b761c4f5f9aab574c6595161c [PID 81216]: warm shut down requested
-20:19:34 Unsubscribing from channel rq:pubsub:6d3bcc1b761c4f5f9aab574c6595161c

@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+'use client';
+// frontend/src/app/careers/jobDetail/interview/page.tsx
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 interface Message {
@@ -11,7 +13,9 @@ interface Message {
     content: string;
 }
 
-export default function InterviewPage() {
+function InterviewContent() {
+    const { useSearchParams } = require('next/navigation');
+
     const router = useRouter();
     const searchParams = useSearchParams();
     const interviewId = searchParams.get('id');
@@ -533,5 +537,12 @@ export default function InterviewPage() {
                 </div>
             </div>
         </div>
+    );
+}
+export default function InterviewPage() {
+    return (
+        <Suspense fallback={<div className="flex justify-center items-center h-screen">Loading...</div>}>
+            <InterviewContent />
+        </Suspense>
     );
 }
