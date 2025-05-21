@@ -3,12 +3,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: "http://13.233.79.35:8000"
     container_name: ai-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"       # localhost:3000
+      - "3000:3000"
     depends_on:
       - backend
+
     
       
   backend:

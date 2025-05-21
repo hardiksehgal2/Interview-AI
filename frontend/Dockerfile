@@ -13,6 +13,9 @@ RUN npm install -g npm@latest && npm install
 # Copy the entire frontend code to the builder container
 COPY ./ ./
 
+ARG NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+
 # Build the Next.js project for Static Site Generation (SSG)
 RUN npm run build
 
