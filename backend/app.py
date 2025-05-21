@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
     await close_mongo_connection()
     print("Application shutdown: MongoDB connection closed.")
 
-app = FastAPI(title="AI Interview Assistant API", lifespan=lifespan)
+app = FastAPI(title="AI Interview Assistant API", lifespan=lifespan , root_path="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,7 +35,10 @@ app.add_middleware(
 #     # Redirect to the index.html
 #     return FileResponse("frontend/index.html")
 
-
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+    
 @app.post("/jd/", tags=["Job Descriptions"])
 async def upload_job_description(jd: JDCreate):
     """
