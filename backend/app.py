@@ -1,4 +1,5 @@
 # main.py
+import os
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -6,11 +7,14 @@ from fastapi.staticfiles import StaticFiles
 from typing import Optional, List, AsyncGenerator
 import io
 from contextlib import asynccontextmanager
+from fastapi import  HTTPException, status
+from bson import ObjectId
+
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from services import extract_text_from_pdf_stream, call_llm_for_interview_prep, get_follow_up_question, text_to_speech
 from utils import pdf_to_base64
-from model_schema import InterviewDataStorage, JDCreate, MessageEntry
-from mongo_op import connect_to_mongo, close_mongo_connection, save_resume, save_interview_data, get_resume_by_jd, get_jd_by_id, get_interview_data_by_id, get_jd_by_domain, save_jd, update_interview_data
+from model_schema import InterviewDataStorage, JDCreate, InterviewSummaryResponse
+from mongo_op import db, connect_to_mongo, close_mongo_connection, save_resume, save_interview_data, get_resume_by_jd, get_jd_by_id, get_interview_data_by_id, get_jd_by_domain, save_jd, update_interview_data
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_to_mongo()
@@ -34,16 +38,17 @@ app.add_middleware(
 # async def read_root():
 #     # Redirect to the index.html
 #     return FileResponse("frontend/index.html")
-
+MONGO_URI = os.getenv("MONGO_URI")
+DATABASE_NAME = "ai_interview"
+client = None
+JD_COLLECTION = "job_description"
+RESUME_COLLECTION = "uploaded_resume"
+INTERVIEW_DATA_COLLECTION = "interview_data"
 
 @app.get("/")  # This will be accessible at /api/ due to your root_path
 def health_check():
     return {"status": "healthy", "message": "AI Interview Assistant API is running"}
 
-@app.get("/health")
-def health_check():
-    return {"status": "healthy"}
-    
 @app.post("/jd/", tags=["Job Descriptions"])
 async def upload_job_description(jd: JDCreate):
     """
@@ -215,7 +220,7 @@ async def websocket_interview_endpoint(websocket: WebSocket, interview_id: str):
             if is_last_question and follow_up_mode:
                 # We've just received a response to the follow-up of the last question
                 # This is where we should end the interview
-                closing_text = "Thank you for all your thoughtful responses. That concludes our interview today. We'll be in touch regarding next steps."
+                closing_text = f"Thank you for all your thoughtful responses. That concludes our interview today. We'll be in touch regarding next steps. \n Interview ID: {interview_id} use"
                 message_history.append({
                     "role": "assistant",
                     "content": closing_text
@@ -287,3 +292,78 @@ async def websocket_interview_endpoint(websocket: WebSocket, interview_id: str):
         except RuntimeError:
             pass
 
+@app.get("/interview/{interview_id}", response_model=InterviewSummaryResponse)
+async def get_interview_summary(interview_id: str):
+    """
+    Get interview summary data including candidate info and analysis results
+    """
+    try:
+        # Check if the ID is a valid ObjectId
+        if not ObjectId.is_valid(interview_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid interview ID format"
+            )
+        
+        # Get interview data with explicit error handling
+        try:
+            # Print debug info
+            print(f"Attempting to retrieve interview with ID: {interview_id}")
+            
+            # Use the existing function with explicit error handling
+            interview_data = await get_interview_data_by_id(interview_id)
+            
+            # Print what we got
+            print(f"Retrieved data: {type(interview_data)}")
+            if interview_data:
+                print(f"Keys in data: {interview_data.keys()}")
+            else:
+                print("No data retrieved, interview_data is None")
+                
+        except Exception as db_error:
+            print(f"Database error: {str(db_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Database error: {str(db_error)}"
+            )
+            
+        # Check if interview exists
+        if not interview_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Interview with ID {interview_id} not found"
+            )
+            
+        # Safely build response
+        response = {
+            "candidate_name": "",
+            "candidate_email": "",
+            "status": "unknown",
+            "analysis": None,
+            "summary_error": None
+        }
+        
+        # Only try to access keys if we have data
+        if interview_data:
+            response["candidate_name"] = interview_data.get("candidate_name", "")
+            response["candidate_email"] = interview_data.get("candidate_email", "")
+            response["status"] = interview_data.get("status", "unknown")
+            response["analysis"] = interview_data.get("analysis")
+            response["summary_error"] = interview_data.get("summary_error")
+            
+        return response
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        # Enhanced error logging
+        import traceback
+        print(f"Error in get_interview_summary: {str(e)}")
+        print(traceback.format_exc())
+        
+        # Handle other exceptions
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving interview data: {str(e)}"
+        )
