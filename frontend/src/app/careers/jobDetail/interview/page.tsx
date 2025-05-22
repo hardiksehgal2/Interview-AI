@@ -204,9 +204,12 @@ function InterviewContent() {
         }
 
         // Use secure WebSocket if page is served over HTTPS
-        const backendProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const backendHost = 'localhost:8000';
-        const wsUrl = `${backendProtocol}//${backendHost}/ws/interview/${interviewId}/`;
+        const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+        const wsProtocol = backendUrl.startsWith('https') || window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsHost = backendUrl.replace('https://', '').replace('http://', '');
+        const wsUrl = `${wsProtocol}//${wsHost}/ws/interview/${interviewId}/`;
+        
+        console.log('Connecting to WebSocket URL:', wsUrl);
 
         // For development, you can hardcode it if needed:
         // const wsUrl = `ws://localhost:8000/ws/interview/${interviewId}/`;
