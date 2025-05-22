@@ -35,6 +35,11 @@ app.add_middleware(
 #     # Redirect to the index.html
 #     return FileResponse("frontend/index.html")
 
+
+@app.get("/")  # This will be accessible at /api/ due to your root_path
+def health_check():
+    return {"status": "healthy", "message": "AI Interview Assistant API is running"}
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
