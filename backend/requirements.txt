@@ -10,3 +10,4 @@ Pillow==11.2.1
 gtts==2.5.4
 pyttsx3==2.98
 instructor==1.8.3
+numpy==2.2.6
