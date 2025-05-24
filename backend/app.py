@@ -1,20 +1,23 @@
-# main.py
-import os
+import asyncio
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 from typing import Optional, List, AsyncGenerator
 import io
 from contextlib import asynccontextmanager
-from fastapi import  HTTPException, status
-from bson import ObjectId
+from services.utils import extract_text_from_pdf_stream, pdf_to_base64
+from services.llm import call_llm_for_interview_prep, get_follow_up_question, process_interview_completion
+from services.tts_services import text_to_speech_sarvam_base64_array
+from services.model_schema import InterviewDataStorage, JDCreate, InterviewSummaryResponse
+from services.mongo_op import connect_to_mongo, close_mongo_connection, save_resume, save_interview_data, get_resume_by_jd, get_jd_by_id, get_interview_data_by_id, get_jd_by_domain, save_jd, update_interview_data
+from services.asr_services import transcribe_audio
+import json
+import cv2
+import numpy as np
+import time
+import json
+import base64
 
-from motor.motor_asyncio import AsyncIOMotorDatabase
-from services import extract_text_from_pdf_stream, call_llm_for_interview_prep, get_follow_up_question, text_to_speech
-from utils import pdf_to_base64
-from model_schema import InterviewDataStorage, JDCreate, InterviewSummaryResponse
-from mongo_op import db, connect_to_mongo, close_mongo_connection, save_resume, save_interview_data, get_resume_by_jd, get_jd_by_id, get_interview_data_by_id, get_jd_by_domain, save_jd, update_interview_data
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_to_mongo()
@@ -22,7 +25,9 @@ async def lifespan(app: FastAPI):
     await close_mongo_connection()
     print("Application shutdown: MongoDB connection closed.")
 
-app = FastAPI(title="AI Interview Assistant API", lifespan=lifespan , root_path="/api")
+
+app = FastAPI(title="AI Interview Assistant API",
+              lifespan=lifespan, root_path="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,14 +43,9 @@ app.add_middleware(
 # async def read_root():
 #     # Redirect to the index.html
 #     return FileResponse("frontend/index.html")
-MONGO_URI = os.getenv("MONGO_URI")
-DATABASE_NAME = "ai_interview"
-client = None
-JD_COLLECTION = "job_description"
-RESUME_COLLECTION = "uploaded_resume"
-INTERVIEW_DATA_COLLECTION = "interview_data"
 
-@app.get("/")  # This will be accessible at /api/ due to your root_path
+
+@app.get("/health")
 def health_check():
     return {"status": "healthy", "message": "AI Interview Assistant API is running"}
 
@@ -102,15 +102,14 @@ async def analyze_resume(candidate_name: str = Form(...), candidate_email: str =
 
     resume_text = ""
     resume_base64_str = ""
-    
+
     try:
         # Read resume file contents
         resume_content = await resume_file.read()
-        # Create BytesIO streams for PyPDF2 and base64 conversion
-        with io.BytesIO(resume_content) as resume_bytes_io_for_text:
-            resume_text = extract_text_from_pdf_stream(resume_bytes_io_for_text)
-        with io.BytesIO(resume_content) as resume_bytes_io_for_base64:
-            resume_base64_str = pdf_to_base64(resume_bytes_io_for_base64) # Convert original resume to base64
+        resume_bytes_io = io.BytesIO(resume_content)
+
+        resume_text = extract_text_from_pdf_stream(resume_bytes_io)
+        resume_base64_str = pdf_to_base64(resume_bytes_io)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing resume file: {e}")
     finally:
@@ -118,8 +117,8 @@ async def analyze_resume(candidate_name: str = Form(...), candidate_email: str =
 
     if not resume_text.strip():
         print(f"Warning: No text extracted from resume: {resume_file.filename}")
-        raise HTTPException(status_code=422, detail="Could not extract text from resume PDF. The PDF might be image-based or empty.")
-    
+        raise HTTPException(status_code=422, detail="Could not extract text from resume PDF.")
+
     result = await save_resume(candidate_name, resume_base64_str, resume_text, jd_id)
 
     if "error" in result:
@@ -130,240 +129,445 @@ async def analyze_resume(candidate_name: str = Form(...), candidate_email: str =
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred during LLM processing: {e}")
 
-    # Store in 'interview_data' collection
     interview_data_to_store_dict = {
-        "candidate_name": llm_result.get('candidate_name'),
-        "candidate_email": llm_result.get('candidate_email'),
+        "candidate_name": candidate_name,
+        "candidate_email": candidate_email,
         "resume_text": resume_text,
         "jd_id": jd_id,
         "interview_questions": llm_result.get('interview_questions'),
-        "status":"interview_scheduled"
+        "status": "interview_scheduled"
     }
-    
+
     interview_data_to_store = InterviewDataStorage(**interview_data_to_store_dict)
     save_res = await save_interview_data(interview_data_to_store)
-    
+
     if 'error' in save_res:
         raise HTTPException(status_code=500, detail=save_res['error'])
 
-    return {
-        'message': "Interview preparation data processed and stored successfully.",
-        'interview_id': save_res['id']
-    }
+    return {'message': "Interview preparation data processed and stored successfully.", 'interview_id': save_res['id']}
 
 
 @app.websocket("/ws/interview/{interview_id}/")
 async def websocket_interview_endpoint(websocket: WebSocket, interview_id: str):
     await websocket.accept()
-    
-    # Get interview data
+
     interview_data = await get_interview_data_by_id(interview_id)
     if not interview_data:
         await websocket.send_text(f"ERROR:Interview data not found for ID {interview_id}")
         await websocket.close(code=1008)
         return
-    
-    # Initialize interview state
+
     current_question_index = 0
     follow_up_mode = False
     total_questions = len(interview_data.get("interview_questions", []))
-    
-    # Initialize message history for LLM
+
     message_history = []
-    
+
     try:
-        # Start with the first pre-prepared question
         if total_questions > 0:
             current_question = interview_data["interview_questions"][current_question_index]
-            
-            # Add this question to message history
-            message_history.append({
-                "role": "assistant", 
-                "content": current_question
-            })
-            
-            # Convert to speech and send both text and audio
-            initial_audio = await text_to_speech(current_question)
+
+            message_history.append({"role": "assistant", "content": current_question})
+
+            initial_audio_array = await text_to_speech_sarvam_base64_array(current_question)
             await websocket.send_text(f"AI_QUESTION_TEXT:{current_question}")
-            await websocket.send_bytes(initial_audio)
+
+            audio_message = {"type": "audio_array", "audios": initial_audio_array}
+            await websocket.send_text(f"AI_AUDIO_ARRAY:{json.dumps(audio_message)}")
         else:
             await websocket.send_text("ERROR:No interview questions found")
             await websocket.close(code=1008)
             return
-        
+
         while True:
-            # Receive candidate's answer
-            candidate_response_text = await websocket.receive_text()
-            print(f"Candidate (via WebSocket for {interview_id}): {candidate_response_text}")
+            candidate_response_audio = await websocket.receive_bytes()
+            print(f"Received audio response from candidate for interview {interview_id}, size: {len(candidate_response_audio)} bytes")
             
-            # Add candidate response to message history
-            message_history.append({
-                "role": "user",
-                "content": candidate_response_text
-            })
+            audio_size_mb = len(candidate_response_audio) / (1024 * 1024)
+            if audio_size_mb > 25:  # Adjust based on your tier
+                await websocket.send_text("ERROR:Audio file too large. Please keep recordings under 25MB.")
+                continue
             
-            # # Check for manual end of interview phrases (override)
-            # if "thank you" in candidate_response_text.lower() or "that's all" in candidate_response_text.lower():
-            #     closing_text = "Thank you for your time. This concludes the interview."
-            #     message_history.append({
-            #         "role": "assistant",
-            #         "content": closing_text
-            #     })
-            #     closing_audio = await text_to_speech(closing_text)
-            #     await websocket.send_text(f"AI_QUESTION_TEXT:{closing_text}")
-            #     await websocket.send_bytes(closing_audio)
-            #     break
+            candidate_response_text = await transcribe_audio(candidate_response_audio)
             
-            # Check if we've reached the end of the interview
-            # End when: last question (index == total-1) AND in follow_up_mode AND just received response
+            if not candidate_response_text:
+                await websocket.send_text("ERROR:Failed to transcribe audio. Please try speaking again.")
+                continue
+            
+            print(f"\n\nTranscribed (via Groq for {interview_id}): {candidate_response_text}\n\n")
+
+
+            message_history.append({"role": "user", "content": candidate_response_text})
+
             is_last_question = current_question_index == total_questions - 1
             if is_last_question and follow_up_mode:
-                # We've just received a response to the follow-up of the last question
-                # This is where we should end the interview
-                closing_text = f"Thank you for all your thoughtful responses. That concludes our interview today. We'll be in touch regarding next steps. \n Interview ID: {interview_id} use"
-                message_history.append({
-                    "role": "assistant",
-                    "content": closing_text
-                })
-                closing_audio = await text_to_speech(closing_text)
-                await websocket.send_text(f"AI_QUESTION_TEXT:{closing_text}")
-                await websocket.send_bytes(closing_audio)
+                closing_text = f"Thank you for all your thoughtful responses. That concludes our interview today. We'll be in touch regarding next steps.\nInterview ID: {interview_id} use this ID to check your interview status."
 
-                # Store message_history directly as dictionaries
-                update_result = await update_interview_data(
-                    interview_id=interview_id,
-                    status="interview_completed",
-                    message_history=message_history  # Pass the list of dictionaries directly
-                )
-                print(f"Interview {interview_id} completed and saved to database.")
-                if "error" in update_result:
-                    print(f"Error updating interview data: {update_result['error']}")
-                break
-            
-            # Decide on next action based on current mode
+                message_history.append({"role": "assistant", "content": closing_text})
+
+                closing_audio_array = await text_to_speech_sarvam_base64_array(closing_text)
+                await websocket.send_text(f"AI_QUESTION_TEXT:{closing_text}")
+
+                audio_message = {"type": "audio_array", "audios": closing_audio_array}
+                await websocket.send_text(f"AI_AUDIO_ARRAY:{json.dumps(audio_message)}")
+
+                await process_interview_completion(interview_data, message_history)
+                await asyncio.sleep(1)
+                await websocket.close(code=1000)  # Normal Closure
+                print(f"Interview {interview_id} completed. Closing WebSocket connection.")
+                
+                return
+
             if follow_up_mode:
-                # We've just asked a follow-up and got a response
-                # Move to the next main question
                 current_question_index += 1
                 follow_up_mode = False
-                
-                # Ask the next pre-prepared question
+
                 next_question_text = interview_data["interview_questions"][current_question_index]
             else:
-                # We've just asked a main question and got a response
-                # Generate a follow-up question based on message history
-                next_question_text = await get_follow_up_question(
-                    message_history,
-                    interview_data
-                )
+                next_question_text = await get_follow_up_question(message_history, interview_data)
                 follow_up_mode = True
-            
-            # Add the generated question to message history
-            message_history.append({
-                "role": "assistant",
-                "content": next_question_text
-            })
-            
+
+            message_history.append({"role": "assistant", "content": next_question_text})
+
             print(f"Next question for {interview_id}: {next_question_text}")
-            
-            # Convert to speech and send
-            question_audio = await text_to_speech(next_question_text)
+
+            question_audio_array = await text_to_speech_sarvam_base64_array(next_question_text)
             await websocket.send_text(f"AI_QUESTION_TEXT:{next_question_text}")
-            await websocket.send_bytes(question_audio)
-            
+
+            audio_message = {"type": "audio_array", "audios": question_audio_array}
+            await websocket.send_text(f"AI_AUDIO_ARRAY:{json.dumps(audio_message)}")
+
     except WebSocketDisconnect:
         print(f"Client disconnected from interview {interview_id}")
-        update_result = await update_interview_data(
-            interview_id=interview_id,
-            status="interview_interrupted",
-            message_history=message_history
-        )
+        try:
+            update_result = await update_interview_data(interview_id=interview_id, status="interview_interrupted", message_history=message_history)
+            if "error" in update_result:
+                print(f"Error saving interrupted state interview data: {update_result['error']}")
+        except RuntimeError:
+            pass
+
     except Exception as e:
         print(f"Error in WebSocket for interview {interview_id}: {str(e)}")
         try:
-            update_result = await update_interview_data(
-                interview_id=interview_id,
-                status="interview_error",
-                message_history=message_history
-            )
+            update_result = await update_interview_data(interview_id=interview_id, status="interview_error", message_history=message_history)
             if "error" in update_result:
                 print(f"Error saving error state interview data: {update_result['error']}")
             await websocket.close(code=1011)  # Internal Error
         except RuntimeError:
             pass
 
-@app.get("/interview/{interview_id}", response_model=InterviewSummaryResponse)
+
+@app.get("/interview/{interview_id}", response_model=InterviewSummaryResponse, tags=["Interviews"])
 async def get_interview_summary(interview_id: str):
-    """
-    Get interview summary data including candidate info and analysis results
-    """
     try:
-        # Check if the ID is a valid ObjectId
-        if not ObjectId.is_valid(interview_id):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid interview ID format"
-            )
-        
-        # Get interview data with explicit error handling
-        try:
-            # Print debug info
-            print(f"Attempting to retrieve interview with ID: {interview_id}")
+        interview_data = await get_interview_data_by_id(interview_id)
             
-            # Use the existing function with explicit error handling
-            interview_data = await get_interview_data_by_id(interview_id)
-            
-            # Print what we got
-            print(f"Retrieved data: {type(interview_data)}")
-            if interview_data:
-                print(f"Keys in data: {interview_data.keys()}")
-            else:
-                print("No data retrieved, interview_data is None")
-                
-        except Exception as db_error:
-            print(f"Database error: {str(db_error)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database error: {str(db_error)}"
-            )
-            
-        # Check if interview exists
         if not interview_data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Interview with ID {interview_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Interview with ID {interview_id} not found")
             
-        # Safely build response
         response = {
             "candidate_name": "",
             "candidate_email": "",
             "status": "unknown",
             "analysis": None,
-            "summary_error": None
         }
         
-        # Only try to access keys if we have data
         if interview_data:
             response["candidate_name"] = interview_data.get("candidate_name", "")
             response["candidate_email"] = interview_data.get("candidate_email", "")
             response["status"] = interview_data.get("status", "unknown")
             response["analysis"] = interview_data.get("analysis")
-            response["summary_error"] = interview_data.get("summary_error")
             
         return response
         
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
+
     except Exception as e:
-        # Enhanced error logging
-        import traceback
         print(f"Error in get_interview_summary: {str(e)}")
-        print(traceback.format_exc())
-        
-        # Handle other exceptions
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving interview data: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error retrieving interview data: {str(e)}")
+
+
+class OpenCVAntiCheat:
+    def __init__(self):
+        # These cascades come with OpenCV - no extra downloads needed
+        self.face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        self.profile_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + 'haarcascade_profileface.xml')
+
+        # Violation tracking (No eye-related violations)
+        self.violations = {
+            'no_face': 0,
+            'multiple_faces': 0,
+            'looking_away': 0,
+            'too_close': 0,
+            'too_far': 0
+        }
+
+        self.total_frames = 0
+        self.start_time = time.time()
+
+        # For movement detection
+        self.prev_face_center = None
+        self.movement_threshold = 50
+
+    def analyze_face_position(self, face, frame_shape):
+        """Analyze if person is looking straight or away"""
+        x, y, w, h = face
+
+        # Face center
+        face_center_x = x + w // 2
+        face_center_y = y + h // 2
+
+        # Frame center
+        frame_center_x = frame_shape[1] // 2
+        frame_center_y = frame_shape[0] // 2
+
+        # Calculate deviations
+        horizontal_deviation = abs(face_center_x - frame_center_x)
+        vertical_deviation = abs(face_center_y - frame_center_y)
+
+        # Normalize by frame size
+        h_dev_ratio = horizontal_deviation / frame_shape[1]
+        v_dev_ratio = vertical_deviation / frame_shape[0]
+
+        # Check if looking straight (face centered)
+        looking_straight = h_dev_ratio < 0.2 and v_dev_ratio < 0.15
+
+        return {
+            'looking_straight': looking_straight,
+            'horizontal_deviation': h_dev_ratio,
+            'vertical_deviation': v_dev_ratio,
+            'face_center': (face_center_x, face_center_y)
+        }
+
+    def analyze_face_size(self, face, frame_shape):
+        """Determine if person is too close or too far"""
+        x, y, w, h = face
+
+        # Face area vs frame area
+        face_area = w * h
+        frame_area = frame_shape[0] * frame_shape[1]
+        face_ratio = face_area / frame_area
+
+        # Classification
+        if face_ratio < 0.02:
+            return 'too_far', face_ratio
+        elif face_ratio > 0.35:
+            return 'too_close', face_ratio
+        else:
+            return 'good_distance', face_ratio
+
+    def check_profile_face(self, gray_frame):
+        """Check if person turned to profile (side view)"""
+        profiles = self.profile_cascade.detectMultiScale(gray_frame, 1.3, 5)
+        return len(profiles) > 0
+
+    def process_frame(self, frame):
+        """Main processing function"""
+        self.total_frames += 1
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Detect frontal faces
+        faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
+
+        violations_this_frame = []
+        metrics = {}
+
+        if len(faces) == 0:
+            # Check for profile faces
+            profile_detected = self.check_profile_face(gray)
+
+            if profile_detected:
+                violations_this_frame.append("Person turned to side profile")
+                self.violations['looking_away'] += 1
+                metrics['face_detected'] = True
+                metrics['looking_straight'] = False
+            else:
+                violations_this_frame.append("No face detected")
+                self.violations['no_face'] += 1
+                metrics['face_detected'] = False
+                metrics['looking_straight'] = False
+
+            metrics['face_size_ratio'] = 0.0
+
+        elif len(faces) > 1:
+            # Multiple faces
+            violations_this_frame.append("Multiple faces detected")
+            self.violations['multiple_faces'] += 1
+
+            # Use largest face
+            largest_face = max(faces, key=lambda f: f[2] * f[3])
+            faces = [largest_face]
+
+        if len(faces) == 1:
+            face = faces[0]
+            x, y, w, h = face
+
+            # Draw face rectangle
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+            metrics['face_detected'] = True
+
+            # Analyze face position (gaze direction)
+            position_analysis = self.analyze_face_position(face, frame.shape)
+            metrics['looking_straight'] = bool(
+                position_analysis['looking_straight'])
+            metrics['horizontal_deviation'] = float(
+                position_analysis['horizontal_deviation'])
+
+            if not position_analysis['looking_straight']:
+                violations_this_frame.append("Not looking straight at camera")
+                self.violations['looking_away'] += 1
+
+            # Analyze face size (distance)
+            distance_status, face_ratio = self.analyze_face_size(
+                face, frame.shape)
+            metrics['face_size_ratio'] = float(face_ratio)
+
+            if distance_status == 'too_far':
+                violations_this_frame.append("Sitting too far from camera")
+                self.violations['too_far'] += 1
+            elif distance_status == 'too_close':
+                violations_this_frame.append("Sitting too close to camera")
+                self.violations['too_close'] += 1
+
+            # Track movement (excessive movement detection)
+            current_center = position_analysis['face_center']
+            if self.prev_face_center is not None:
+                movement = np.sqrt((current_center[0] - self.prev_face_center[0]) ** 2 +
+                                   (current_center[1] - self.prev_face_center[1]) ** 2)
+                if movement > self.movement_threshold:
+                    violations_this_frame.append("Excessive movement detected")
+
+            self.prev_face_center = current_center
+
+        # Calculate overall metrics
+        total_violations = sum(self.violations.values())
+        violation_rate = (total_violations / self.total_frames) * \
+            100 if self.total_frames > 0 else 0
+        session_duration = time.time() - self.start_time
+
+        # Compile final metrics - ensure all values are JSON serializable
+        metrics.update({
+            'current_violations': violations_this_frame,
+            'violation_count': int(len(violations_this_frame)),
+            'total_violation_rate': float(round(violation_rate, 2)),
+            'session_duration': float(round(session_duration, 1)),
+            'total_frames': int(self.total_frames),
+            'violations_breakdown': {k: int(v) for k, v in self.violations.items()}
+        })
+
+        # Add visual indicators to frame
+        self.add_visual_feedback(frame, violations_this_frame, metrics)
+
+        return frame, metrics
+
+    def add_visual_feedback(self, frame, violations, metrics):
+        """Add text and visual feedback to frame"""
+        # Status indicator in top-right
+        status_color = (0, 255, 0) if len(violations) == 0 else (0, 0, 255)
+        status_text = "✓ OK" if len(
+            violations) == 0 else f"⚠ {len(violations)} Issues"
+        cv2.putText(frame, status_text, (frame.shape[1] - 150, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+
+        # List violations
+        y_offset = 30
+        for violation in violations:
+            cv2.putText(frame, f"• {violation}", (10, y_offset),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+            y_offset += 20
+
+        # Session stats at bottom
+        stats_text = f"Violations: {sum(self.violations.values())} | Rate: {metrics['total_violation_rate']:.1f}%"
+        cv2.putText(frame, stats_text, (10, frame.shape[0] - 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+        time_text = f"Time: {metrics['session_duration']:.1f}s | Frames: {metrics['total_frames']}"
+        cv2.putText(frame, time_text, (10, frame.shape[0] - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+
+# Global detector
+detector = OpenCVAntiCheat()
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    cap = None
+
+    try:
+        # Try different camera indices
+        camera_opened = False
+        for camera_index in range(5):
+            cap = cv2.VideoCapture(camera_index)
+            if cap.isOpened():
+                ret, test_frame = cap.read()
+                if ret:
+                    print(f"✅ Camera {camera_index} working")
+                    camera_opened = True
+                    break
+                else:
+                    cap.release()
+            else:
+                if cap:
+                    cap.release()
+
+        if not camera_opened:
+            error_msg = {
+                'error': 'Could not open camera. Please check camera permissions in System Preferences → Security & Privacy → Camera'
+            }
+            await websocket.send_text(json.dumps(error_msg))
+            return
+
+        # Set camera properties for better performance
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FPS, 10)
+
+        frame_count = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("❌ Failed to read frame")
+                await asyncio.sleep(0.1)
+                continue
+
+            frame_count += 1
+
+            # Process every frame
+            try:
+                processed_frame, metrics = detector.process_frame(frame)
+
+                # Convert to base64
+                _, buffer = cv2.imencode('.jpg', processed_frame, [
+                                         cv2.IMWRITE_JPEG_QUALITY, 70])
+                frame_base64 = base64.b64encode(buffer).decode('utf-8')
+
+                # Create response data
+                response_data = {
+                    'frame': frame_base64,
+                    'metrics': metrics
+                }
+
+                # Send to frontend
+                await websocket.send_text(json.dumps(response_data))
+
+            except WebSocketDisconnect:
+                print("Client disconnected - Closing connection")
+                break
+            except Exception as e:
+                print(f"❌ Frame processing error: {e}")
+                continue
+
+            await asyncio.sleep(0.1)  # 10 FPS
+
+    except Exception as e:
+        print(f"❌ WebSocket error: {e}")
+    finally:
+        if cap and cap.isOpened():
+            cap.release()
+            print("📷 Camera released")
