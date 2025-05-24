@@ -341,7 +341,28 @@ class OpenCVAntiCheat:
             'vertical_deviation': v_dev_ratio,
             'face_center': (face_center_x, face_center_y)
         }
-
+    def process_image_data(self, image_bytes):
+        """Process image data sent from frontend"""
+        try:
+            # Convert bytes to OpenCV image
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if frame is None:
+                return None, None
+            
+            # Use existing processing logic
+            processed_frame, metrics = self.process_frame(frame)
+            
+            # Convert back to base64 for frontend
+            _, buffer = cv2.imencode('.jpg', processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            frame_base64 = base64.b64encode(buffer).decode('utf-8')
+            
+            return frame_base64, metrics
+            
+        except Exception as e:
+            print(f"Error processing image: {e}")
+            return None, None
     def analyze_face_size(self, face, frame_shape):
         """Determine if person is too close or too far"""
         x, y, w, h = face
@@ -491,87 +512,34 @@ class OpenCVAntiCheat:
 
 
 # Global detector
-detector = OpenCVAntiCheat()
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    cap = None
-
+    print("✅ Client connected for camera processing")
+    
+    # Create individual detector for this connection
+    user_detector = OpenCVAntiCheat()
+    
     try:
-        # Try different camera indices
-        camera_opened = False
-        for camera_index in range(5):
-            cap = cv2.VideoCapture(camera_index)
-            if cap.isOpened():
-                ret, test_frame = cap.read()
-                if ret:
-                    print(f"✅ Camera {camera_index} working")
-                    camera_opened = True
-                    break
-                else:
-                    cap.release()
-            else:
-                if cap:
-                    cap.release()
-
-        if not camera_opened:
-            error_msg = {
-                'error': 'Could not open camera. Please check camera permissions in System Preferences → Security & Privacy → Camera'
-            }
-            await websocket.send_text(json.dumps(error_msg))
-            return
-
-        # Set camera properties for better performance
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        cap.set(cv2.CAP_PROP_FPS, 10)
-
-        frame_count = 0
         while True:
-            ret, frame = cap.read()
-            if not ret:
-                print("❌ Failed to read frame")
-                await asyncio.sleep(0.1)
-                continue
-
-            frame_count += 1
-
-            # Process every frame
-            try:
-                processed_frame, metrics = detector.process_frame(frame)
-
-                # Convert to base64
-                _, buffer = cv2.imencode('.jpg', processed_frame, [
-                                         cv2.IMWRITE_JPEG_QUALITY, 70])
-                frame_base64 = base64.b64encode(buffer).decode('utf-8')
-
-                # Create response data
+            image_data = await websocket.receive_bytes()
+            
+            # Use user-specific detector
+            processed_frame_b64, metrics = user_detector.process_image_data(image_data)
+            
+            if processed_frame_b64 and metrics:
                 response_data = {
-                    'frame': frame_base64,
+                    'frame': processed_frame_b64,
                     'metrics': metrics
                 }
-
-                # Send to frontend
                 await websocket.send_text(json.dumps(response_data))
-
-            except WebSocketDisconnect:
-                print("Client disconnected - Closing connection")
-                break
-            except Exception as e:
-                print(f"❌ Frame processing error: {e}")
-                continue
-
-            await asyncio.sleep(0.1)  # 10 FPS
-
+            
+    except WebSocketDisconnect:
+        print("Client disconnected from camera processing")
     except Exception as e:
-        print(f"❌ WebSocket error: {e}")
-    finally:
-        if cap and cap.isOpened():
-            cap.release()
-            print("📷 Camera released")
-
+        print(f"WebSocket error: {e}")
 if __name__ == "__main__":
     import uvicorn
     print("🚀 Starting AI Interview Backend...")
