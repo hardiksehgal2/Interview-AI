@@ -123,6 +123,91 @@ function InterviewContent() {
 
     // Add this with other state variables
     const [showInterviewComplete, setShowInterviewComplete] = useState(false);
+    const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+    const [isCapturingFrames, setIsCapturingFrames] = useState(false);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Add these functions with your other camera functions
+    const startLocalCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: 640,
+                    height: 480,
+                    frameRate: 10
+                }
+            });
+
+            setLocalStream(stream);
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                await videoRef.current.play();
+            }
+
+            // Start capturing frames after video is ready
+            setTimeout(() => {
+                startFrameCapture();
+            }, 1000);
+
+            console.log('✅ Local camera started');
+
+        } catch (error) {
+            console.error('Camera access failed:', error);
+            setCameraConnectionError('Camera access denied. Please allow camera permissions.');
+        }
+    };
+
+    const startFrameCapture = () => {
+        if (!videoRef.current || !canvasRef.current) return;
+
+        setIsCapturingFrames(true);
+
+        const captureFrame = () => {
+            if (!videoRef.current || !canvasRef.current || !cameraWsRef.current) return;
+
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+
+            if (!ctx || video.readyState !== 4) return;
+
+            // Set canvas size to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // Draw current video frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convert to blob and send to backend
+            canvas.toBlob((blob) => {
+                if (blob && cameraWsRef.current?.readyState === WebSocket.OPEN) {
+                    blob.arrayBuffer().then(buffer => {
+                        cameraWsRef.current?.send(buffer);
+                    });
+                }
+            }, 'image/jpeg', 0.7);
+        };
+
+        // Capture frames at 10 FPS
+        frameIntervalRef.current = setInterval(captureFrame, 100);
+    };
+
+    const stopLocalCamera = () => {
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            setLocalStream(null);
+        }
+
+        if (frameIntervalRef.current) {
+            clearInterval(frameIntervalRef.current);
+            frameIntervalRef.current = null;
+        }
+
+        setIsCapturingFrames(false);
+    };
     // Add this function with other helper functions
     const copyInterviewId = async () => {
         try {
@@ -176,6 +261,7 @@ function InterviewContent() {
             if (cameraReconnectTimeoutRef.current) {
                 clearTimeout(cameraReconnectTimeoutRef.current);
             }
+            stopLocalCamera();
         };
     }, [interviewId]);
 
@@ -277,7 +363,8 @@ function InterviewContent() {
     // CAMERA MONITORING FUNCTIONS
     const startCameraMonitoring = () => {
         setMonitoringStarted(true);
-        connectCameraWebSocket();
+        startLocalCamera(); // Start local camera first
+        connectCameraWebSocket(); // Then connect to backend
     };
 
     const connectCameraWebSocket = () => {
@@ -287,13 +374,22 @@ function InterviewContent() {
         setCameraConnectionError('');
 
         try {
-            cameraWsRef.current = new WebSocket('ws://localhost:8000/ws');
+            const backendProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const backendHost = 'localhost:8000';
+            const wsUrl = `${backendProtocol}//${backendHost}/ws`;
+            cameraWsRef.current = new WebSocket(wsUrl);
+
 
             cameraWsRef.current.onopen = () => {
                 setCameraConnected(true);
                 setCameraConnecting(false);
                 setCameraConnectionError('');
                 console.log('✅ Connected to camera monitoring server');
+
+                // Start local camera if not already started
+                if (!localStream) {
+                    startLocalCamera();
+                }
             };
 
             cameraWsRef.current.onmessage = (event) => {
@@ -496,7 +592,7 @@ function InterviewContent() {
                 'Interview session ended.';
 
             addSystemMessage(closeMessage);
-            setShowInterviewComplete(true);
+            // setShowInterviewComplete(true);
 
             if (isRecording) {
                 stopRecording();
@@ -876,7 +972,24 @@ function InterviewContent() {
                             <Camera className="mr-2 h-4 w-4" />
                             Live Camera Feed
                         </h3>
+                        {/* Replace the existing camera feed div with this: */}
                         <div className="relative">
+                            {/* Local video element (hidden) */}
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                muted
+                                playsInline
+                                style={{ display: 'none' }}
+                            />
+
+                            {/* Hidden canvas for frame capture */}
+                            <canvas
+                                ref={canvasRef}
+                                style={{ display: 'none' }}
+                            />
+
+                            {/* Display processed frame from backend */}
                             {frame ? (
                                 <div className="relative">
                                     <img
@@ -903,7 +1016,9 @@ function InterviewContent() {
                                 <div className="w-full h-32 bg-gray-200 rounded-lg flex items-center justify-center">
                                     <div className="text-center">
                                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-500 mx-auto mb-2"></div>
-                                        <p className="text-gray-500 text-xs">Loading camera feed...</p>
+                                        <p className="text-gray-500 text-xs">
+                                            {cameraConnected ? 'Starting camera...' : 'Connecting to server...'}
+                                        </p>
                                     </div>
                                 </div>
                             )}

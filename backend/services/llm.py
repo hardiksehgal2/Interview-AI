@@ -15,7 +15,7 @@ os.environ['GROQ_API_KEY'] = os.getenv('GROQ_API_KEY')
 
 async def call_llm_for_interview_prep(resume_text: str, jd_text: str) -> Dict[str, Any]:
     prompt = f"""
-Given the following job description and resume text, extract candidate name, email and generate 1 interview questions that will help assess the candidate's suitability for the role.
+Given the following job description and resume text, extract candidate name, email and generate 2 interview questions that will help assess the candidate's suitability for the role.
 - The questions should be relevant to both the job description and the candidate's background as presented in the resume.
 - The first question should be an introductory question to get to know the candidate better. You should directly ask the candidate to introduce themselves, with a greeting.
 - The questions should prioritize the candidate's experience and skills as they relate to the job description.
