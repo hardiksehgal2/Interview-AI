@@ -6,16 +6,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { DialogOverlay } from '@/components/ui/dialog';
 
 interface Metrics {
-  face_detected: boolean;
-  looking_straight: boolean;
-  face_size_ratio: number;
-  horizontal_deviation: number;
-  current_violations: string[];
-  violation_count: number;
-  total_violation_rate: number;
-  session_duration: number;
-  total_frames: number;
-  violations_breakdown: {
+  face_detected: boolean;           // Is there a face in camera?
+  looking_straight: boolean;        // Is person looking at screen?
+  face_size_ratio: number;         // How close/far is the face?
+  horizontal_deviation: number;     // How much are they looking away?
+  current_violations: string[];     // What rules are being broken now?
+  violation_count: number;          // How many violations right now?
+  total_violation_rate: number;     // Overall percentage of violations
+  session_duration: number;         // How long has interview been running?
+  total_frames: number;            // How many camera frames processed?
+  violations_breakdown: {          // Detailed breakdown of violation types
     no_face: number;
     multiple_faces: number;
     looking_away: number;
