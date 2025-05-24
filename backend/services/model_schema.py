@@ -25,6 +25,7 @@ class InterviewSummaryResponse(BaseModel):
     status: str
     analysis: Optional[Dict[str, Any]] = None
     summary_error: Optional[str] = None
+    message_history: list = []
 
 
 class InterviewAnalysis(BaseModel):
