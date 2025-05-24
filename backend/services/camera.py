@@ -1,32 +1,13 @@
 import cv2
-import numpy as np
 import time
-import json
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-import base64
-import asyncio
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # For testing
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+import numpy as np
 
 
 class OpenCVAntiCheat:
     def __init__(self):
-        # These cascades come with OpenCV - no extra downloads needed
-        self.face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        self.profile_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_profileface.xml')
+        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        self.profile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
 
-        # Violation tracking (No eye-related violations)
         self.violations = {
             'no_face': 0,
             'multiple_faces': 0,
@@ -142,18 +123,15 @@ class OpenCVAntiCheat:
 
             # Analyze face position (gaze direction)
             position_analysis = self.analyze_face_position(face, frame.shape)
-            metrics['looking_straight'] = bool(
-                position_analysis['looking_straight'])
-            metrics['horizontal_deviation'] = float(
-                position_analysis['horizontal_deviation'])
+            metrics['looking_straight'] = bool(position_analysis['looking_straight'])
+            metrics['horizontal_deviation'] = float(position_analysis['horizontal_deviation'])
 
             if not position_analysis['looking_straight']:
                 violations_this_frame.append("Not looking straight at camera")
                 self.violations['looking_away'] += 1
 
             # Analyze face size (distance)
-            distance_status, face_ratio = self.analyze_face_size(
-                face, frame.shape)
+            distance_status, face_ratio = self.analyze_face_size(face, frame.shape)
             metrics['face_size_ratio'] = float(face_ratio)
 
             if distance_status == 'too_far':
@@ -197,147 +175,21 @@ class OpenCVAntiCheat:
     def add_visual_feedback(self, frame, violations, metrics):
         """Add text and visual feedback to frame"""
         # Status indicator in top-right
-        status_color = (0, 255, 0) if len(violations) == 0 else (0, 0, 255)
-        status_text = "✓ OK" if len(
-            violations) == 0 else f"⚠ {len(violations)} Issues"
-        cv2.putText(frame, status_text, (frame.shape[1] - 150, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+    #     status_color = (0, 255, 0) if len(violations) == 0 else (0, 0, 255)
+    #     status_text = "✓ OK" if len(
+    #         violations) == 0 else f"⚠ {len(violations)} Issues"
+    #     cv2.putText(frame, status_text, (frame.shape[1] - 150, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
 
-        # List violations
-        y_offset = 30
-        for violation in violations:
-            cv2.putText(frame, f"• {violation}", (10, y_offset),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-            y_offset += 20
+    #     # List violations
+    #     y_offset = 30
+    #     for violation in violations:
+    #         cv2.putText(frame, f"• {violation}", (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+    #         y_offset += 20
 
-        # Session stats at bottom
-        stats_text = f"Violations: {sum(self.violations.values())} | Rate: {metrics['total_violation_rate']:.1f}%"
-        cv2.putText(frame, stats_text, (10, frame.shape[0] - 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+    #     # Session stats at bottom
+    #     stats_text = f"Violations: {sum(self.violations.values())} | Rate: {metrics['total_violation_rate']:.1f}%"
+    #     cv2.putText(frame, stats_text, (10, frame.shape[0] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-        time_text = f"Time: {metrics['session_duration']:.1f}s | Frames: {metrics['total_frames']}"
-        cv2.putText(frame, time_text, (10, frame.shape[0] - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-
-# Global detector
-detector = OpenCVAntiCheat()
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    cap = None
-
-    try:
-        # Try different camera indices
-        camera_opened = False
-        for camera_index in range(5):
-            cap = cv2.VideoCapture(camera_index)
-            if cap.isOpened():
-                ret, test_frame = cap.read()
-                if ret:
-                    print(f"✅ Camera {camera_index} working")
-                    camera_opened = True
-                    break
-                else:
-                    cap.release()
-            else:
-                if cap:
-                    cap.release()
-
-        if not camera_opened:
-            error_msg = {
-                'error': 'Could not open camera. Please check camera permissions in System Preferences → Security & Privacy → Camera'
-            }
-            await websocket.send_text(json.dumps(error_msg))
-            return
-
-        # Set camera properties for better performance
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        cap.set(cv2.CAP_PROP_FPS, 10)
-
-        frame_count = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                print("❌ Failed to read frame")
-                await asyncio.sleep(0.1)
-                continue
-
-            frame_count += 1
-
-            # Process every frame
-            try:
-                processed_frame, metrics = detector.process_frame(frame)
-
-                # Convert to base64
-                _, buffer = cv2.imencode('.jpg', processed_frame, [
-                                         cv2.IMWRITE_JPEG_QUALITY, 70])
-                frame_base64 = base64.b64encode(buffer).decode('utf-8')
-
-                # Create response data
-                response_data = {
-                    'frame': frame_base64,
-                    'metrics': metrics
-                }
-
-                # Send to frontend
-                await websocket.send_text(json.dumps(response_data))
-
-            except WebSocketDisconnect:
-                print("Client disconnected - Closing connection")
-                break
-            except Exception as e:
-                print(f"❌ Frame processing error: {e}")
-                continue
-
-            await asyncio.sleep(0.1)  # 10 FPS
-
-    except Exception as e:
-        print(f"❌ WebSocket error: {e}")
-    finally:
-        if cap and cap.isOpened():
-            cap.release()
-            print("📷 Camera released")
-
-
-@app.get("/")
-async def root():
-    return {
-        "message": "OpenCV Anti-Cheat API Running",
-        "detection_methods": [
-            "Face presence detection",
-            "Gaze direction estimation",
-            "Distance monitoring",
-            "Profile face detection",
-            "Multiple person detection"
-        ]
-    }
-
-
-@app.get("/test-camera")
-async def test_camera():
-    """Test if camera is accessible"""
-    cap = cv2.VideoCapture(0)
-    if cap.isOpened():
-        ret, frame = cap.read()
-        cap.release()
-        return {"camera_status": "OK", "frame_captured": ret}
-    return {"camera_status": "ERROR", "message": "Could not open camera"}
-
-if __name__ == "__main__":
-    import uvicorn
-    print("🚀 Starting OpenCV Anti-Cheat System")
-    print("📋 Detection Features:")
-    print("   ✓ Face detection")
-    print("   ✓ Gaze direction (basic)")
-    print("   ✓ Distance monitoring")
-    print("   ✓ Profile detection")
-    print("   ✓ Multiple face detection")
-    print("   ✓ Movement tracking")
-    print("\n🔗 Connect frontend to: ws://localhost:8000/ws")
-    print("🧪 Test camera: http://localhost:8000/test-camera")
-
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    #     time_text = f"Time: {metrics['session_duration']:.1f}s | Frames: {metrics['total_frames']}"
+    #     cv2.putText(frame, time_text, (10, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        pass

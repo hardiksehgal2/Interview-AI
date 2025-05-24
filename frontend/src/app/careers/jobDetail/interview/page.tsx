@@ -134,10 +134,10 @@ function InterviewContent() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    width: 640,
-                    height: 480,
-                    frameRate: 10
-                }
+                    width: 320,
+                    height: 240,
+                    frameRate: { ideal: 5, max: 5 }
+                  }
             });
 
             setLocalStream(stream);
@@ -164,8 +164,10 @@ function InterviewContent() {
         if (!videoRef.current || !canvasRef.current) return;
 
         setIsCapturingFrames(true);
+        let frameCount = 0;
 
         const captureFrame = () => {
+            if ((frameCount++ % 2) !== 0) return;
             if (!videoRef.current || !canvasRef.current || !cameraWsRef.current) return;
 
             const video = videoRef.current;
@@ -188,7 +190,7 @@ function InterviewContent() {
                         cameraWsRef.current?.send(buffer);
                     });
                 }
-            }, 'image/jpeg', 0.7);
+            }, 'image/jpeg', 0.5);
         };
 
         // Capture frames at 10 FPS
@@ -374,8 +376,8 @@ function InterviewContent() {
         setCameraConnectionError('');
 
         try {
-            const backendProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const backendHost = 'localhost:8000';
+            const backendProtocol = window.location.protocol === 'https:' ? 'wss:' : 'wss:';
+            const backendHost = 'my-backend-service-873829650882.asia-south1.run.app';
             const wsUrl = `${backendProtocol}//${backendHost}/ws`;
             cameraWsRef.current = new WebSocket(wsUrl);
 
@@ -553,8 +555,8 @@ function InterviewContent() {
             interviewWebsocketRef.current.close();
         }
 
-        const backendProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const backendHost = 'localhost:8000';
+        const backendProtocol = window.location.protocol === 'https:' ? 'wss:' : 'wss:';
+        const backendHost = 'my-backend-service-873829650882.asia-south1.run.app';
         const wsUrl = `${backendProtocol}//${backendHost}/ws/interview/${interviewId}/`;
 
         console.log('Connecting to Interview WebSocket URL:', wsUrl);
@@ -959,12 +961,12 @@ function InterviewContent() {
                 {/* Right Side - Camera Monitoring */}
                 <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
                     {/* Session Info */}
-                    <div className="bg-gray-50 border-b border-gray-200 p-3">
+                    {/* <div className="bg-gray-50 border-b border-gray-200 p-3">
                         <div className="flex items-center justify-between text-sm text-gray-600">
                             <div>Session: {metrics?.session_duration || 0}s</div>
                             <div>Frames: {metrics?.total_frames || 0}</div>
                         </div>
-                    </div>
+                    </div> */}
 
                     {/* Camera Feed */}
                     <div className="p-4 border-b border-gray-200">

@@ -54,20 +54,29 @@ async def get_follow_up_question(message_history: List[Dict[str, str]], intervie
 CANDIDATE INFORMATION:
 - Name: {interview_data.get('candidate_name')}
 
-- RESUME TEXT: {interview_data.get('resume_text', '')}...
+- RESUME TEXT: {interview_data.get('resume_text', '')}
+
+---
+
+The following are the Fixed Questions to ask to candidate:
+{interview_data.get('interview_questions', '')}
 
 ---
 
 YOUR TASK:
-Generate ONE thoughtful follow-up question based on the candidate's most recent response.
-Your follow-up should:
+Based on the candidate response ask either the next Fixed Question or a follow-up clarifying question.
+Your follow-up question should:
 1. Probe deeper into their answer
 2. Ask for specific examples if they were vague
 3. Challenge assumptions if appropriate
 4. Evaluate their critical thinking
 5. Relate to the job position they're interviewing for
+6. Not be asked more than 2 times in a row
 
-Be conversational and sound natural. Your response should ONLY contain the follow-up question text.
+**IN TOTAL YOU SHOULD ASK ONLY 4 QUESTIONS**
+
+Be conversational and sound natural. Your response should ONLY contain the question text.
+If the candidate wants to quit the interview or if the answer to last *Fixed Question* has been provided by candidate, respond ONLY with: "[END]"
 Do not add any commentary, explanations, or notes.
 """
 

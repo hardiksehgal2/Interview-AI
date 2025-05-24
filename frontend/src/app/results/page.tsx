@@ -30,16 +30,20 @@ interface InterviewResult {
     suggestions: string[];
   } | null;
   summary_error: string | null;
+  message_history?: Array<{
+    role: 'assistant' | 'user';
+    content: string;
+  }>;
 }
 const useAnimate = () => {
-    const [shouldAnimate, setShouldAnimate] = useState(false);
-    
-    useEffect(() => {
-      setShouldAnimate(true);
-    }, []);
-    
-    return shouldAnimate;
-  };
+  const [shouldAnimate, setShouldAnimate] = useState(false);
+
+  useEffect(() => {
+    setShouldAnimate(true);
+  }, []);
+
+  return shouldAnimate;
+};
 const Results: React.FC = () => {
   const router = useRouter();
   const [formData, setFormData] = useState<FormData>({
@@ -49,7 +53,7 @@ const Results: React.FC = () => {
   const shouldAnimate = useAnimate();
   const [errors, setErrors] = useState<Partial<FormData>>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [message, setMessage] = useState<{text: string, type: 'success' | 'error' | null}>({
+  const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' | null }>({
     text: '',
     type: null
   });
@@ -57,17 +61,17 @@ const Results: React.FC = () => {
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {};
-    
+
     if (!formData.email) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email is invalid';
     }
-    
+
     if (!formData.interviewId) {
       newErrors.interviewId = 'Interview ID is required';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -78,7 +82,7 @@ const Results: React.FC = () => {
       ...prev,
       [name]: value
     }));
-    
+
     // Clear error when user types
     if (errors[name as keyof FormData]) {
       setErrors(prev => ({
@@ -90,17 +94,17 @@ const Results: React.FC = () => {
 
   const handleSubmit = async (e: React.MouseEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     setIsLoading(true);
     setMessage({ text: '', type: null });
     setInterviewResult(null);
-    
+
     try {
       // Get interview data using the ID
       const response = await axiosInstance.get<InterviewResult>(`/interview/${formData.interviewId}`);
-      
+
       // Check if the email matches
       if (response.data.candidate_email.toLowerCase() !== formData.email.toLowerCase()) {
         setMessage({
@@ -109,9 +113,9 @@ const Results: React.FC = () => {
         });
         return;
       }
-      
+
       // Check interview status
-      if (response.data.status === 'summary_generated') {
+      if (response.data.status === 'summary_generated' || 'interview_interrupted') {
         setInterviewResult(response.data);
         setMessage({
           text: 'Interview analysis found!',
@@ -138,7 +142,7 @@ const Results: React.FC = () => {
           type: 'success'
         });
       }
-      
+
     } catch (error) {
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 404) {
@@ -177,7 +181,7 @@ const Results: React.FC = () => {
               <h1 className="text-3xl font-bold text-white mb-2">Interview Results</h1>
               <p className="text-blue-100">Check the status of your interview submission</p>
             </div>
-            
+
             <div className="p-8 space-y-6">
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
@@ -189,9 +193,8 @@ const Results: React.FC = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 rounded-lg border ${
-                    errors.email ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-                  } focus:border-transparent focus:outline-none focus:ring-2 transition-colors`}
+                  className={`w-full px-4 py-3 rounded-lg border ${errors.email ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                    } focus:border-transparent focus:outline-none focus:ring-2 transition-colors`}
                   placeholder="Enter your email"
                 />
                 {errors.email && (
@@ -200,7 +203,7 @@ const Results: React.FC = () => {
                   </p>
                 )}
               </div>
-              
+
               <div>
                 <label htmlFor="interviewId" className="block text-sm font-medium text-gray-700 mb-1">
                   Interview ID
@@ -211,9 +214,8 @@ const Results: React.FC = () => {
                   name="interviewId"
                   value={formData.interviewId}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 rounded-lg border ${
-                    errors.interviewId ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-                  } focus:border-transparent focus:outline-none focus:ring-2 transition-colors`}
+                  className={`w-full px-4 py-3 rounded-lg border ${errors.interviewId ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                    } focus:border-transparent focus:outline-none focus:ring-2 transition-colors`}
                   placeholder="Enter your interview ID"
                 />
                 {errors.interviewId && (
@@ -222,17 +224,16 @@ const Results: React.FC = () => {
                   </p>
                 )}
               </div>
-              
+
               {message.text && (
-                <div className={`p-4 rounded-lg text-sm animate-fadeIn ${
-                  message.type === 'success' ? 'bg-green-100 text-green-800' : 
-                  message.type === 'error' ? 'bg-red-100 text-red-800' : 
-                  'bg-blue-100 text-blue-800'
-                }`}>
+                <div className={`p-4 rounded-lg text-sm animate-fadeIn ${message.type === 'success' ? 'bg-green-100 text-green-800' :
+                    message.type === 'error' ? 'bg-red-100 text-red-800' :
+                      'bg-blue-100 text-blue-800'
+                  }`}>
                   {message.text}
                 </div>
               )}
-              
+
               <button
                 onClick={handleSubmit}
                 disabled={isLoading}
@@ -250,7 +251,7 @@ const Results: React.FC = () => {
                   'Check Results'
                 )}
               </button>
-              
+
               <div className="text-center mt-4">
                 <p className="text-sm text-gray-600">
                   Don&apos;t have an interview ID? <span onClick={() => router.push('/careers')} className="text-blue-600 hover:underline cursor-pointer font-medium">Start an interview</span>
@@ -270,26 +271,24 @@ const Results: React.FC = () => {
                     <p className="text-blue-100">Results for {interviewResult.candidate_name}</p>
                   </div>
                   <div className="mt-4 md:mt-0">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                      interviewResult.status === 'summary_generated' ? 'bg-green-100 text-green-800' : 
-                      interviewResult.status === 'summary_error' ? 'bg-red-100 text-red-800' : 
-                      'bg-blue-100 text-blue-800'
-                    }`}>
-                      {interviewResult.status === 'summary_generated' ? 'Analysis Complete' : 
-                       interviewResult.status === 'summary_error' ? 'Analysis Failed' :
-                       interviewResult.status}
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${interviewResult.status === 'summary_generated' ? 'bg-green-100 text-green-800' :
+                        interviewResult.status === 'summary_error' ? 'bg-red-100 text-red-800' :
+                          'bg-blue-100 text-blue-800'
+                      }`}>
+                      {interviewResult.status === 'summary_generated' ? 'Analysis Complete' :
+                        interviewResult.status === 'summary_error' ? 'Analysis Failed' :
+                          interviewResult.status}
                     </span>
                   </div>
                 </div>
               </div>
-              
+
               <div className="p-8">
                 {message.text && (
-                  <div className={`p-4 mb-6 rounded-lg text-sm animate-fadeIn ${
-                    message.type === 'success' ? 'bg-green-100 text-green-800' : 
-                    message.type === 'error' ? 'bg-red-100 text-red-800' : 
-                    'bg-blue-100 text-blue-800'
-                  }`}>
+                  <div className={`p-4 mb-6 rounded-lg text-sm animate-fadeIn ${message.type === 'success' ? 'bg-green-100 text-green-800' :
+                      message.type === 'error' ? 'bg-red-100 text-red-800' :
+                        'bg-blue-100 text-blue-800'
+                    }`}>
                     {message.text}
                   </div>
                 )}
@@ -302,7 +301,7 @@ const Results: React.FC = () => {
                         <p className="text-gray-700 leading-relaxed">{interviewResult.analysis.summary}</p>
                       </div>
                     )}
-                    
+
                     {interviewResult.analysis.strengths && interviewResult.analysis.strengths.length > 0 && (
                       <div className="animate-slideUp" style={{ animationDelay: '150ms' }}>
                         <h2 className="text-xl font-semibold text-green-700 mb-3 border-b border-green-200 pb-2">Strengths</h2>
@@ -320,7 +319,7 @@ const Results: React.FC = () => {
                         </ul>
                       </div>
                     )}
-                    
+
                     {interviewResult.analysis.weaknesses && interviewResult.analysis.weaknesses.length > 0 && (
                       <div className="animate-slideUp" style={{ animationDelay: '300ms' }}>
                         <h2 className="text-xl font-semibold text-red-700 mb-3 border-b border-red-200 pb-2">Areas for Improvement</h2>
@@ -338,7 +337,7 @@ const Results: React.FC = () => {
                         </ul>
                       </div>
                     )}
-                    
+
                     {interviewResult.analysis.suggestions && interviewResult.analysis.suggestions.length > 0 && (
                       <div className="animate-slideUp" style={{ animationDelay: '450ms' }}>
                         <h2 className="text-xl font-semibold text-blue-700 mb-3 border-b border-blue-200 pb-2">Recommendations</h2>
@@ -358,14 +357,43 @@ const Results: React.FC = () => {
                     )}
                   </div>
                 )}
-                
+
                 {interviewResult.status === 'summary_error' && (
                   <div className="p-5 bg-red-50 rounded-lg text-red-800 mb-6 animate-fadeIn">
                     <p className="font-medium">Error processing your interview:</p>
                     <p>{interviewResult.summary_error || 'Unknown error occurred'}</p>
                   </div>
                 )}
-                
+            {interviewResult.message_history && interviewResult.message_history.length > 0 && (
+              <div className="animate-slideUp mt-20 " style={{ animationDelay: '600ms' }}>
+                <h2 className="text-xl font-semibold text-gray-800 mb-3 border-b pb-2">Interview Transcript</h2>
+                <div className="space-y-4 mt-4">
+                  {interviewResult.message_history.map((message, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg animate-fadeIn ${message.role === 'assistant'
+                          ? 'bg-blue-50 border-l-4 border-blue-400'
+                          : 'bg-gray-50 border-l-4 border-gray-400'
+                        }`}
+                      style={{ animationDelay: `${650 + index * 100}ms` }}
+                    >
+                      <div className="flex items-center mb-2">
+                        <div className={`font-semibold text-sm ${message.role === 'assistant' ? 'text-blue-700' : 'text-gray-700'
+                          }`}>
+                          {message.role === 'assistant' ? 'Interviewer' : 'Candidate'}
+                        </div>
+                        <div className="ml-2 text-xs text-gray-500">
+                          {message.role === 'assistant' ? '🤖' : '👤'}
+                        </div>
+                      </div>
+                      <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        {message.content}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
                 <div className="flex justify-between mt-8 pt-6 border-t border-gray-200">
                   <button
                     onClick={() => {
@@ -377,7 +405,7 @@ const Results: React.FC = () => {
                   >
                     Check Another Interview
                   </button>
-                  
+
                   <button
                     onClick={() => router.push('/careers')}
                     className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-4 focus:ring-blue-300"
@@ -387,10 +415,41 @@ const Results: React.FC = () => {
                 </div>
               </div>
             </div>
+            {/* {interviewResult.message_history && interviewResult.message_history.length > 0 && (
+              <div className="animate-slideUp mt-20 bg-white px-4 py-16 rounded-lg shadow-xl" style={{ animationDelay: '600ms' }}>
+                <h2 className="text-xl font-semibold text-gray-800 mb-3 border-b pb-2">Interview Transcript</h2>
+                <div className="space-y-4 mt-4">
+                  {interviewResult.message_history.map((message, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg animate-fadeIn ${message.role === 'assistant'
+                          ? 'bg-blue-50 border-l-4 border-blue-400'
+                          : 'bg-gray-50 border-l-4 border-gray-400'
+                        }`}
+                      style={{ animationDelay: `${650 + index * 100}ms` }}
+                    >
+                      <div className="flex items-center mb-2">
+                        <div className={`font-semibold text-sm ${message.role === 'assistant' ? 'text-blue-700' : 'text-gray-700'
+                          }`}>
+                          {message.role === 'assistant' ? 'Interviewer' : 'Candidate'}
+                        </div>
+                        <div className="ml-2 text-xs text-gray-500">
+                          {message.role === 'assistant' ? '🤖' : '👤'}
+                        </div>
+                      </div>
+                      <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        {message.content}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )} */}
           </div>
+
         </div>
       )}
-      
+
       <style jsx global>{`
         @keyframes fadeIn {
           from { opacity: 0; }
@@ -410,6 +469,7 @@ const Results: React.FC = () => {
           animation: slideUp 0.5s ease-out forwards;
         }
       `}</style>
+
     </div>
   );
 };

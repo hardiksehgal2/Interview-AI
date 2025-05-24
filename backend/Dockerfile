@@ -1,5 +1,5 @@
-# Use Python 3.9 slim base image
-FROM python:3.9-slim
+# Change from python:3.9-slim to:
+FROM python:3.11-slim
 
 # Set working directory in the container
 WORKDIR /app
@@ -11,10 +11,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    python3-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    gcc ffmpeg libespeak1 libasound2-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 
 # Upgrade pip
 RUN pip install --upgrade pip 
@@ -31,7 +30,7 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Command to run the application - using port 8000 as you specified
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # Expose the port the app runs on
 EXPOSE 8000
