@@ -147,41 +147,41 @@ export function JobDetailsContent() {
            
 
             // Send the application data to the API
-            // const response = await AxiosInstances.post('/resumes/apply/', formDataToSend, {
-            //     headers: {
-            //         'Content-Type': 'multipart/form-data',
-            //     },
-            // });
+            const response = await AxiosInstances.post('/resumes/apply/', formDataToSend, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
 
-            // // Handle successful response
-            // if (response.data && response.data.interview_id) {
-            //     // Store the interview ID
-            //     setInterviewId(response.data.interview_id);
+            // Handle successful response
+            if (response.data && response.data.interview_id) {
+                // Store the interview ID
+                setInterviewId(response.data.interview_id);
 
-            //     // Show success toast
-            //     toast.success("Application submitted successfully!", {
-            //         id: "application-submission"
-            //     });
+                // Show success toast
+                toast.success("Application submitted successfully!", {
+                    id: "application-submission"
+                });
 
-            //     setSubmitSuccess(true);
-            //     setFormData({
-            //         name: "",
-            //         email: "",
-            //         resume: null,
-            //         jobId: id || null
-            //     });
+                setSubmitSuccess(true);
+                setFormData({
+                    name: "",
+                    email: "",
+                    resume: null,
+                    jobId: id || null
+                });
 
-            //     // Show interview guidelines dialog after 0 seconds
-                // setTimeout(() => {
-                //     setIsDialogOpen(false);
-                //     setShowInterviewDialog(true);
-                // }, 0);
-            // } else {
-            //     // Unexpected response format
-            //     toast.error("Unexpected response from server", {
-            //         id: "application-submission"
-            //     });
-            // }
+                // Show interview guidelines dialog after 0 seconds
+                setTimeout(() => {
+                    setIsDialogOpen(false);
+                    setShowInterviewDialog(true);
+                }, 0);
+            } else {
+                // Unexpected response format
+                toast.error("Unexpected response from server", {
+                    id: "application-submission"
+                });
+            }
         } catch (error: any) {
             console.error("Error submitting application:", error);
 
