@@ -571,3 +571,8 @@ async def websocket_endpoint(websocket: WebSocket):
         if cap and cap.isOpened():
             cap.release()
             print("📷 Camera released")
+
+if __name__ == "__main__":
+    import uvicorn
+    print("🚀 Starting AI Interview Backend...")
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

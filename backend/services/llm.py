@@ -161,7 +161,7 @@ async def process_interview_completion(interview_data: dict, message_history: li
     Background task to process interview completion - generate report and update status.
     """
     try:
-        print(f"Processing completed interview {interview_data.get("_id")}...")
+        print(f"Processing completed interview {interview_data.get('_id')}...")
         update_result = await update_interview_data(
             interview_id=interview_data.get("_id"), 
             status="interview_completed", 
