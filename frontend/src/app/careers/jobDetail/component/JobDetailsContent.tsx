@@ -5,7 +5,7 @@
 import { useRouter } from 'next/navigation';
 
 import { useState, useEffect } from 'react'
-import {  useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'  // Import remark-gfm for GitHub Flavored Markdown (tables, etc)
 import rehypeRaw from 'rehype-raw'  // For raw HTML support
@@ -34,7 +34,7 @@ interface Job {
     domain: string;
 }
 
- export function JobDetailsContent() {
+export function JobDetailsContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -48,6 +48,7 @@ interface Job {
     const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
     const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+    const [showInterviewDialog, setShowInterviewDialog] = useState<boolean>(false);
     const [formData, setFormData] = useState<{
         name: string;
         email: string;
@@ -90,7 +91,7 @@ interface Job {
 
         fetchJobDetails();
     }, [domain, id]);
-    const handleApplyInterview =()=>{
+    const handleApplyInterview = () => {
         router.push(`/careers/jobDetail/interview?id=${interviewId}`)
     }
 
@@ -143,49 +144,44 @@ interface Job {
             toast.success(
                 "Questions are being generated, this may take few seconds...",
             );
+           
 
             // Send the application data to the API
-            const response = await AxiosInstances.post('/resumes/apply/', formDataToSend, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
+            // const response = await AxiosInstances.post('/resumes/apply/', formDataToSend, {
+            //     headers: {
+            //         'Content-Type': 'multipart/form-data',
+            //     },
+            // });
 
-            // Handle successful response
-            if (response.data && response.data.interview_id) {
-                // Store the interview ID
-                setInterviewId(response.data.interview_id);
+            // // Handle successful response
+            // if (response.data && response.data.interview_id) {
+            //     // Store the interview ID
+            //     setInterviewId(response.data.interview_id);
 
-                // Show success toast
-                toast.success("Application submitted successfully!", {
-                    id: "application-submission"
-                });
+            //     // Show success toast
+            //     toast.success("Application submitted successfully!", {
+            //         id: "application-submission"
+            //     });
 
-                setSubmitSuccess(true);
-                setFormData({
-                    name: "",
-                    email: "",
-                    resume: null,
-                    jobId: id || null
-                });
+            //     setSubmitSuccess(true);
+            //     setFormData({
+            //         name: "",
+            //         email: "",
+            //         resume: null,
+            //         jobId: id || null
+            //     });
 
-                // Reset form after successful submission
+            //     // Show interview guidelines dialog after 0 seconds
                 // setTimeout(() => {
-                    setSubmitSuccess(true);
                 //     setIsDialogOpen(false);
-                    // setFormData({
-                    //     name: "",
-                    //     email: "",
-                    //     resume: null,
-                    //     jobId: id || null
-                    // });
-                // }, 3000);
-            } else {
-                // Unexpected response format
-                toast.error("Unexpected response from server", {
-                    id: "application-submission"
-                });
-            }
+                //     setShowInterviewDialog(true);
+                // }, 0);
+            // } else {
+            //     // Unexpected response format
+            //     toast.error("Unexpected response from server", {
+            //         id: "application-submission"
+            //     });
+            // }
         } catch (error: any) {
             console.error("Error submitting application:", error);
 
@@ -370,124 +366,159 @@ interface Job {
   }
 `}</style>
 
-            <div className="flex justify-center">
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                            <DialogTitle>Apply for {extractTitle(job.jd_text)}</DialogTitle>
-                            <DialogDescription>
-                                Complete the form below to submit your application.
-                            </DialogDescription>
-                        </DialogHeader>
-                        
+<div className="flex justify-center">
+    {/* Main Application Dialog */}
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Apply for {extractTitle(job.jd_text)}</DialogTitle>
+                <DialogDescription>
+                    Complete the form below to submit your application.
+                </DialogDescription>
+            </DialogHeader>
 
-                        {submitSuccess ? (
-                            <DialogContent>
-                            
-                            <div className=" text-center">
-                                <svg
-                                    className="w-16 h-16 text-green-500 mx-auto mb-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                    />
-                                </svg>
-                                <h3 className="text-xl font-bold text-gray-900 mb-2">Application Submitted!</h3>
-                                <p className="text-gray-600">Your Questions are prepared. Your interview ID is: <span className='font-semibold'>{interviewId}</span></p>
-                                <Button onClick={handleApplyInterview} className='bg-indigo-600 mt-8 cursor-pointer hover:bg-indigo-700'>Start Your Interview</Button>
-                            </div>
-                            </DialogContent>
-                        ) : (
-                            <div className="grid gap-4 py-4">
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="name" className="text-right">
-                                        Full Name
-                                    </Label>
-                                    <Input
-                                        id="name"
-                                        name="name"
-                                        value={formData.name}
-                                        onChange={handleInputChange}
-                                        className="col-span-3"
-                                        required
-                                    />
-                                </div>
+            <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">
+                        Full Name
+                    </Label>
+                    <Input
+                        id="name"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        className="col-span-3"
+                        required
+                    />
+                </div>
 
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="email" className="text-right">
-                                        Email
-                                    </Label>
-                                    <Input
-                                        id="email"
-                                        name="email"
-                                        type="email"
-                                        value={formData.email}
-                                        onChange={handleInputChange}
-                                        className="col-span-3"
-                                        required
-                                    />
-                                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="email" className="text-right">
+                        Email
+                    </Label>
+                    <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        className="col-span-3"
+                        required
+                    />
+                </div>
 
-                                <div className="grid grid-cols-4  items-center gap-4">
-                                    <Label htmlFor="resume" className="text-right">
-                                        Resume
-                                    </Label>
-                                    <div className="col-span-3 cursor-pointer items-end justify-center">
-                                        <Input
-                                            id="resume"
-                                            name="resume"
-                                            type="file"
-                                            accept=".pdf"
-                                            onChange={handleFileChange}
-                                            className="col-span-3 cursor-pointer"
-                                            required
-                                        />
-                                       
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        <DialogFooter>
-                            {!submitSuccess && (
-                                <>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => setIsDialogOpen(false)}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        onClick={handleSubmit}
-                                        disabled={isSubmitting || !formData.name || !formData.email || !formData.resume}
-                                        className='cursor-pointer'
-                                    >
-                                        {isSubmitting ? (
-                                            <>
-                                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                                Submitting...
-                                            </>
-                                        ) : (
-                                            'Submit Application'
-                                        )}
-                                    </Button>
-                                </>
-                            )}
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="resume" className="text-right">
+                        Resume
+                    </Label>
+                    <div className="col-span-3 cursor-pointer items-end justify-center">
+                        <Input
+                            id="resume"
+                            name="resume"
+                            type="file"
+                            accept=".pdf"
+                            onChange={handleFileChange}
+                            className="col-span-3 cursor-pointer"
+                            required
+                        />
+                    </div>
+                </div>
             </div>
+
+            <DialogFooter>
+                <Button
+                    variant="outline"
+                    onClick={() => setIsDialogOpen(false)}
+                >
+                    Cancel
+                </Button>
+                <Button
+                    type="submit"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || !formData.name || !formData.email || !formData.resume}
+                    className='cursor-pointer'
+                >
+                    {isSubmitting ? (
+                        <>
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Submitting...
+                        </>
+                    ) : (
+                        'Submit Application'
+                    )}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    {/* Interview Guidelines Dialog - Separate Dialog */}
+    <Dialog open={showInterviewDialog} onOpenChange={setShowInterviewDialog}>
+        <DialogContent className="sm:max-w-lg max-h-lg h-full overflow-y-auto">
+            <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <Target className="w-4 h-4 text-blue-600" />
+                    </div>
+                    Interview Guidelines & Process
+                </DialogTitle>
+                <DialogDescription>
+                    Please read the following important information before starting your interview.
+                </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4 space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-green-800 mb-2">✅ Interview Process</h4>
+                    <ul className="text-sm text-green-700 space-y-1">
+                        <li>• You will be asked a series of questions related to the job role</li>
+                        <li>• Answer all questions to the best of your ability</li>
+                        <li>• A summary of your interview will be generated based on your responses</li>
+                        <li>• You can view your interview summary using your email and interview ID: <span className="font-mono bg-green-100 px-1 rounded">{interviewId}</span></li>
+                    </ul>
+                </div>
+
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-red-800 mb-2">⚠️ Anti-Cheat Monitoring</h4>
+                    <ul className="text-sm text-red-700 space-y-1">
+                        <li>• <strong>No tab switching:</strong> Do not switch to other browser tabs during the interview</li>
+                        <li>• <strong>No window switching:</strong> Stay focused on the interview window</li>
+                        <li>• <strong>Face tracking:</strong> Your camera will monitor your face throughout the interview</li>
+                        <li>• <strong>Single participant:</strong> Ensure you are alone and no one else is visible in the camera</li>
+                    </ul>
+                </div>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-yellow-800 mb-2">📋 Before You Start</h4>
+                    <ul className="text-sm text-yellow-700 space-y-1">
+                        <li>• Ensure stable internet connection</li>
+                        <li>• Find a quiet, well-lit environment</li>
+                        <li>• Position yourself at an appropriate distance from the camera</li>
+                        <li>• Close all unnecessary applications and browser tabs</li>
+                    </ul>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                    <p className="text-sm text-blue-700">
+                        <strong>Your Interview ID:</strong> <span className="font-mono bg-blue-100 px-2 py-1 rounded">{interviewId}</span>
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">Save this ID to access your interview summary later</p>
+                </div>
+            </div>
+
+            <DialogFooter>
+                <Button
+                    onClick={handleApplyInterview}
+                    className="bg-indigo-600 hover:bg-indigo-700 w-full cursor-pointer"
+                >
+                    I Understand - Start My Interview
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+</div>
         </div>
     );
 }
