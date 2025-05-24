@@ -4,77 +4,116 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+
+
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { motion } from 'framer-motion';
+import { Mic, Bot } from 'lucide-react';
 
 interface Message {
-    type: 'ai' | 'user' | 'system';
-    content: string;
+  type: 'ai' | 'user' | 'system';
+  content: string;
+}
+
+/**
+ * Animated microphone / speaker indicator
+ */
+function MicIndicator({
+  isRecording,
+  isAISpeaking
+}: {
+  isRecording: boolean;
+  isAISpeaking: boolean;
+}) {
+  if (!isRecording && !isAISpeaking) return null;
+
+  const icon = isRecording ? (
+    <Mic className="w-4 h-4 text-white" />
+  ) : (
+    <Bot className="w-4 h-4 text-white" />
+  );
+
+  const bgColor = isRecording ? 'bg-red-500' : 'bg-blue-600';
+
+  return (
+    <motion.div
+      initial={{ scale: 1 }}
+      animate={{ scale: [1, 1.3, 1] }}
+      transition={{ repeat: Infinity, duration: 1.2 }}
+      className={`flex items-center justify-center ${bgColor} rounded-full p-3 shadow-lg`}
+    >
+      {icon}
+    </motion.div>
+  );
 }
 
 function InterviewContent() {
-    const { useSearchParams } = require('next/navigation');
+  const { useSearchParams } = require('next/navigation');
 
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const interviewId = searchParams.get('id');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const interviewId = searchParams.get('id');
 
-    // State variables
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [isConnected, setIsConnected] = useState(false);
-    const [isListening, setIsListening] = useState(false);
-    const [isAISpeaking, setIsAISpeaking] = useState(false);
-    const [transcript, setTranscript] = useState('');
-    const [currentFinalTranscript, setCurrentFinalTranscript] = useState('');
-    const [statusMessage, setStatusMessage] = useState('Initializing...');
+  // State variables
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isAISpeaking, setIsAISpeaking] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('Initializing...');
+  const [audioQueue, setAudioQueue] = useState<string[]>([]);
+  const [currentAudioIndex, setCurrentAudioIndex] = useState(0);
+  const [isPlayingQueue, setIsPlayingQueue] = useState(false);
+  const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-    // References
-    const websocketRef = useRef<WebSocket | null>(null);
-    const recognitionRef = useRef<any>(null);
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const audioQueueRef = useRef<Blob[]>([]);
-    const chatContainerRef = useRef<HTMLDivElement>(null);
+  // Audio recording references
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
-    // Initialize WebSocket and speech recognition on component mount
-    useEffect(() => {
-        if (!interviewId) {
-            addSystemMessage('No interview ID found. Please go back and enter your interview ID.');
-            return;
-        }
+  // References
+  const websocketRef = useRef<WebSocket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
-        // Check for speech recognition support
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        const hasSpeechRecognition = !!SpeechRecognition;
+  // Initialize WebSocket and audio recording on component mount
+  useEffect(() => {
+    if (!interviewId) {
+      addSystemMessage('No interview ID found. Please go back and enter your interview ID.');
+      return;
+    }
 
-        if (!hasSpeechRecognition) {
-            addSystemMessage('Your browser does not support Speech Recognition. Please use Chrome, Edge, or Safari.');
-            return;
-        }
+    // Request microphone permission
+    requestMicrophonePermission();
 
-        // Request microphone permission
-        requestMicrophonePermission();
+    // Clean up on component unmount
+    return () => {
+      if (websocketRef.current) {
+        websocketRef.current.close();
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      if (currentAudioSourceRef.current) {
+        currentAudioSourceRef.current.stop();
+        currentAudioSourceRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, [interviewId]);
 
-        // Clean up on component unmount
-        return () => {
-            if (websocketRef.current) {
-                websocketRef.current.close();
-            }
-            if (recognitionRef.current) {
-                recognitionRef.current.stop();
-            }
-            if (audioContextRef.current) {
-                audioContextRef.current.close();
-            }
-        };
-    }, [interviewId]);
-
-    // Scroll to bottom of chat when messages update
-    useEffect(() => {
-        if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-        }
-    }, [messages]);
+  // Scroll to bottom of chat when messages update
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
 
     // Initialize audio context
     const initAudioContext = () => {
@@ -95,10 +134,20 @@ function InterviewContent() {
         setStatusMessage('Requesting microphone access...');
 
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(() => {
+            // Request audio with optimal settings for speech recognition
+            navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    channelCount: 1, // Mono audio as Groq downsamples to mono
+                    sampleRate: 16000, // 16kHz as per Groq's preprocessing
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } 
+            })
+                .then((stream) => {
+                    streamRef.current = stream;
                     setStatusMessage('Microphone access granted.');
-                    setupSpeechRecognition();
+                    setupAudioRecording(stream);
                     connectWebSocket();
                 })
                 .catch((error) => {
@@ -112,81 +161,62 @@ function InterviewContent() {
         }
     };
 
-    // Setup speech recognition
-    const setupSpeechRecognition = () => {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    // Setup audio recording
+    const setupAudioRecording = (stream: MediaStream) => {
+        try {
+            // Use webm/opus for efficiency and compatibility
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+                ? 'audio/webm;codecs=opus' 
+                : 'audio/webm';
 
-        if (!SpeechRecognition) {
-            addSystemMessage('Speech recognition is not supported on this browser.');
+            const mediaRecorder = new MediaRecorder(stream, {
+                mimeType: mimeType,
+                audioBitsPerSecond: 128000 // 128kbps for good quality
+            });
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                // Combine all chunks into a single blob
+                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+                audioChunksRef.current = [];
+
+                // Convert blob to array buffer and send via WebSocket
+                if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+                    try {
+                        const arrayBuffer = await audioBlob.arrayBuffer();
+                        const uint8Array = new Uint8Array(arrayBuffer);
+                        
+                        // Send audio as binary data
+                        websocketRef.current.send(uint8Array);
+                        addUserMessage('[Audio message sent]');
+                        setStatusMessage('Audio sent. Waiting for AI...');
+                    } catch (error) {
+                        console.error('Error sending audio:', error);
+                        addSystemMessage('Error sending audio. Please try again.');
+                        setStatusMessage('Error sending audio.');
+                    }
+                } else {
+                    addSystemMessage('Connection lost. Your audio was not sent.');
+                    setStatusMessage('Connection error. Please refresh.');
+                }
+            };
+
+            mediaRecorderRef.current = mediaRecorder;
+            return true;
+        } catch (error) {
+            console.error('Error setting up audio recording:', error);
+            addSystemMessage('Failed to setup audio recording. Please check your browser compatibility.');
             return false;
         }
-
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-
-        recognition.onresult = (event: any) => {
-            let interimTranscriptSegment = '';
-
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const result = event.results[i];
-                const text = result[0].transcript;
-
-                if (result.isFinal) {
-                    setCurrentFinalTranscript(prev => prev + text.trim() + ' ');
-                } else {
-                    interimTranscriptSegment += text;
-                }
-            }
-
-            setTranscript((currentFinalTranscript + interimTranscriptSegment).trim());
-
-            if (isListening) {
-                setStatusMessage('Listening...');
-            }
-        };
-
-        recognition.onerror = (event: any) => {
-            console.error('Speech recognition error:', event.error);
-            let userMessage = `Speech recognition error: ${event.error}.`;
-
-            if (event.error === 'not-allowed') {
-                userMessage = 'Microphone access was denied. Please allow microphone access to continue the interview.';
-                addSystemMessage(userMessage);
-            } else if (event.error === 'no-speech') {
-                userMessage = 'No speech detected. Please try speaking when the microphone is on.';
-                setStatusMessage(userMessage);
-            } else {
-                addSystemMessage(userMessage);
-            }
-
-            if (isListening) {
-                setIsListening(false);
-                try {
-                    recognition.stop();
-                } catch (e) {
-                    console.warn("Error trying to stop recognition after an error:", e);
-                }
-            }
-
-            setStatusMessage(`Error: ${event.error}. Mic turned off.`);
-        };
-
-        recognition.onend = () => {
-            const wasListeningBeforeOnEnd = isListening;
-            setIsListening(false);
-
-            if (wasListeningBeforeOnEnd) {
-                if (statusMessage === 'Listening...') {
-                    setStatusMessage('Listening session ended. Click "Turn On Mic" to speak again.');
-                }
-            }
-        };
-
-        recognitionRef.current = recognition;
-        return true;
     };
+
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 3;
 
     // Connect to WebSocket
     const connectWebSocket = () => {
@@ -204,15 +234,9 @@ function InterviewContent() {
         }
 
         // Use secure WebSocket if page is served over HTTPS
-        const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-        const wsProtocol = backendUrl.startsWith('https') || window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsHost = backendUrl.replace('https://', '').replace('http://', '');
-        // const wsUrl = `${wsProtocol}//${wsHost}/ws/interview/${interviewId}/`;
-        
-        // console.log('Connecting to WebSocket URL:', wsUrl);
-
-        // For development, you can hardcode it if needed:
-        const wsUrl = `ws://localhost:8000/ws/interview/${interviewId}/`;
+        const backendProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const backendHost = 'localhost:8000';
+        const wsUrl = `${backendProtocol}//${backendHost}/ws/interview/${interviewId}/`;
 
         console.log('Connecting to WebSocket URL:', wsUrl);
 
@@ -231,11 +255,16 @@ function InterviewContent() {
             if (typeof event.data === 'string') {
                 handleTextMessage(event.data);
             } else {
-                handleAudioMessage(event.data);
+                console.error('Received non-text message:', event.data);
             }
         };
 
         socket.onclose = (event) => {
+            if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                setTimeout(() => connectWebSocket(), 2000);
+            }
+
             console.log('WebSocket connection closed:', event.code, event.reason);
             setIsConnected(false);
 
@@ -245,17 +274,10 @@ function InterviewContent() {
 
             addSystemMessage(closeMessage);
 
-            if (isListening) {
-                setIsListening(false);
-                try {
-                    recognitionRef.current?.stop();
-                } catch (e) {
-                    console.warn("Error stopping recognition on WS close:", e);
-                }
+            if (isRecording) {
+                stopRecording();
             }
 
-            setCurrentFinalTranscript('');
-            setTranscript('');
             setStatusMessage('Disconnected. Please refresh the page.');
         };
 
@@ -264,13 +286,8 @@ function InterviewContent() {
             addSystemMessage('Error with the interview connection. Please try refreshing the page.');
             setIsConnected(false);
 
-            if (isListening) {
-                setIsListening(false);
-                try {
-                    recognitionRef.current?.stop();
-                } catch (e) {
-                    console.warn("Error stopping recognition on WS error:", e);
-                }
+            if (isRecording) {
+                stopRecording();
             }
 
             setStatusMessage('Connection error. Please refresh.');
@@ -284,6 +301,17 @@ function InterviewContent() {
         if (message.startsWith('AI_QUESTION_TEXT:')) {
             const questionText = message.substring('AI_QUESTION_TEXT:'.length);
             addAIMessage(questionText);
+        } else if (message.startsWith('AI_AUDIO_ARRAY:')) {
+            const audioArrayData = message.substring('AI_AUDIO_ARRAY:'.length);
+            try {
+                const parsedAudioData = JSON.parse(audioArrayData);
+                if (parsedAudioData.type === 'audio_array' && parsedAudioData.audios) {
+                    handleAudioArray(parsedAudioData.audios);
+                }
+            } catch (error) {
+                console.error('Error parsing audio array:', error);
+                addSystemMessage('Error processing audio data from server.');
+            }
         } else if (message.startsWith('ERROR:')) {
             const errorText = message.substring('ERROR:'.length);
             addSystemMessage(`Server Error: ${errorText}`);
@@ -293,41 +321,61 @@ function InterviewContent() {
         }
     };
 
-    // Handle audio messages from server
-    const handleAudioMessage = async (audioData: Blob) => {
+    // Handle audio array
+    const handleAudioArray = (audioBase64Array: string[]) => {
+        if (!audioBase64Array || audioBase64Array.length === 0) {
+            addSystemMessage("No audio data received from server.");
+            return;
+        }
+
+        console.log(`Received ${audioBase64Array.length} audio segments`);
+        
         if (!initAudioContext()) {
             addSystemMessage("Cannot play AI response: Audio context not available. Please read the question.");
             setStatusMessage("Audio playback error. Read question above.");
             return;
         }
 
-        audioQueueRef.current.push(audioData);
-        processAudioQueue();
+        // Set the audio queue and start playing
+        setAudioQueue(audioBase64Array);
+        setCurrentAudioIndex(0);
+        playAudioQueue(audioBase64Array, 0);
     };
 
-    // Process audio queue
-    const processAudioQueue = async () => {
-        if (isAISpeaking || audioQueueRef.current.length === 0 || !audioContextRef.current) return;
+    // Play audio queue sequentially
+    const playAudioQueue = async (audioArray: string[], startIndex: number = 0) => {
+        if (!audioContextRef.current || audioArray.length === 0 || startIndex >= audioArray.length) {
+            setIsPlayingQueue(false);
+            setIsAISpeaking(false);
+            setStatusMessage('AI finished. Click "Start Recording" to respond.');
+            return;
+        }
 
+        if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
+        }
+
+        setIsPlayingQueue(true);
         setIsAISpeaking(true);
-        setStatusMessage('AI is speaking...');
+        setStatusMessage(`AI is speaking... (${startIndex + 1}/${audioArray.length})`);
 
-        if (isListening) {
-            setIsListening(false);
-            recognitionRef.current?.stop();
-            setCurrentFinalTranscript('');
-            setTranscript('');
-            addSystemMessage('Your microphone was turned off as the AI started speaking.');
+        // Stop recording if it's active
+        if (isRecording) {
+            stopRecording();
+            addSystemMessage('Your recording was stopped as the AI started speaking.');
         }
 
         try {
-            const audioData = audioQueueRef.current.shift();
-            if (!audioData) {
-                setIsAISpeaking(false);
-                return;
+            const audioBase64 = audioArray[startIndex];
+            
+            // Convert base64 to binary
+            const binaryString = atob(audioBase64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
             }
-
-            const arrayBuffer = await audioData.arrayBuffer();
+            
+            const arrayBuffer = bytes.buffer;
 
             if (audioContextRef.current.state === 'suspended') {
                 await audioContextRef.current.resume();
@@ -338,105 +386,96 @@ function InterviewContent() {
             source.buffer = audioBuffer;
             source.connect(audioContextRef.current.destination);
 
-            source.onended = () => {
-                setIsAISpeaking(false);
+            // Store reference to current audio source for potential stopping
+            currentAudioSourceRef.current = source;
 
-                if (audioQueueRef.current.length > 0) {
-                    processAudioQueue();
+            source.onended = () => {
+                currentAudioSourceRef.current = null;
+                setCurrentAudioIndex(startIndex + 1);
+                
+                // Play next audio in queue
+                if (startIndex + 1 < audioArray.length) {
+                    // Small delay between audio segments for smoother transition
+                    setTimeout(() => {
+                        playAudioQueue(audioArray, startIndex + 1);
+                    }, 100);
                 } else {
-                    setStatusMessage('AI finished. Click "Turn On Microphone" to respond.');
+                    // All audio segments completed
+                    setIsPlayingQueue(false);
+                    setIsAISpeaking(false);
+                    setAudioQueue([]);
+                    setCurrentAudioIndex(0);
+                    setStatusMessage('AI finished. Click "Start Recording" to respond.');
                 }
             };
 
             source.start(0);
+            
         } catch (error) {
-            console.error('Error processing audio:', error);
-            addSystemMessage(`Error playing AI audio: ${error instanceof Error ? error.message : 'Unknown error'}. You can read the question above.`);
-            setIsAISpeaking(false);
-
-            if (audioQueueRef.current.length > 0) {
-                processAudioQueue();
+            console.error(`Error playing audio segment ${startIndex + 1}:`, error);
+            addSystemMessage(`Error playing AI audio segment ${startIndex + 1}: ${error instanceof Error ? error.message : 'Unknown error'}. You can read the question above.`);
+            
+            // Try to continue with next segment
+            if (startIndex + 1 < audioArray.length) {
+                setTimeout(() => {
+                    playAudioQueue(audioArray, startIndex + 1);
+                }, 500);
             } else {
-                setStatusMessage('Error playing audio. Click "Turn On Mic" to respond.');
+                setIsPlayingQueue(false);
+                setIsAISpeaking(false);
+                setAudioQueue([]);
+                setCurrentAudioIndex(0);
+                setStatusMessage('Error playing audio. Click "Start Recording" to respond.');
             }
         }
     };
 
-    // Toggle microphone
-    const toggleMicrophoneAndSend = () => {
-        if (!recognitionRef.current) {
-            setupSpeechRecognition();
-            if (!recognitionRef.current) {
-                addSystemMessage('Failed to set up speech recognition. Please check permissions and browser.');
-                return;
-            }
+    // Start recording
+    const startRecording = () => {
+        if (!mediaRecorderRef.current) {
+            addSystemMessage('Audio recording not initialized. Please refresh the page.');
+            return;
         }
 
-        if (isListening) {
-            // User is turning off mic and sending response
-            setIsListening(false);
-            recognitionRef.current.stop();
+        if (isAISpeaking || isPlayingQueue) {
+            addSystemMessage("Please wait for the AI to finish speaking before recording.");
+            setStatusMessage("AI is speaking. Please wait...");
+            return;
+        }
 
-            const finalTranscriptToSend = currentFinalTranscript.trim();
+        if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
+            addSystemMessage("Not connected to the server. Cannot start recording.");
+            setStatusMessage("Connection error. Please refresh.");
+            return;
+        }
 
-            if (finalTranscriptToSend && websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-                sendMessageToServer(finalTranscriptToSend);
-                addUserMessage(finalTranscriptToSend);
-                setStatusMessage('Response sent. Waiting for AI...');
-            } else if (finalTranscriptToSend) {
-                setStatusMessage('Mic off. WebSocket not open. Could not send.');
-                addSystemMessage('Error: Connection to server lost. Your response was not sent. Please refresh.');
-            } else {
-                setStatusMessage('Mic off. No speech recorded to send.');
-            }
-
-            setTranscript('');
-            setCurrentFinalTranscript('');
-        } else {
-            // User is turning on mic
-            if (isAISpeaking) {
-                addSystemMessage("Please wait for the AI to finish speaking before turning on your microphone.");
-                setStatusMessage("AI is speaking. Please wait...");
-                return;
-            }
-
-            if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
-                addSystemMessage("Not connected to the server. Cannot start microphone.");
-                setStatusMessage("Connection error. Please refresh.");
-                return;
-            }
-
-            setCurrentFinalTranscript('');
-            setTranscript('');
-
-            try {
-                recognitionRef.current.start();
-                setIsListening(true);
-                setStatusMessage('Listening...');
-            } catch (error) {
-                console.error('Error starting speech recognition:', error);
-                setIsListening(false);
-
-                if (error instanceof Error) {
-                    if (error.name === 'InvalidStateError') {
-                        setStatusMessage('Microphone is already starting or active.');
-                    } else {
-                        setStatusMessage(`Mic error: ${error.message}`);
-                        addSystemMessage(`Error starting microphone: ${error.message}. Please check your microphone and browser permissions.`);
-                    }
-                }
-            }
+        try {
+            audioChunksRef.current = [];
+            mediaRecorderRef.current.start();
+            setIsRecording(true);
+            setStatusMessage('Recording... Click "Stop & Send" when finished.');
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            addSystemMessage('Error starting recording. Please try again.');
+            setStatusMessage('Recording error.');
         }
     };
 
-    // Send message to server
-    const sendMessageToServer = (message: string) => {
-        if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-            websocketRef.current.send(message);
+    // Stop recording
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            setStatusMessage('Processing audio...');
+        }
+    };
+
+    // Toggle recording
+    const toggleRecording = () => {
+        if (isRecording) {
+            stopRecording();
         } else {
-            console.error('WebSocket not open. Cannot send message.');
-            addSystemMessage('Cannot send message: Connection lost. Please refresh.');
-            setStatusMessage("Failed to send. Connection lost.");
+            startRecording();
         }
     };
 
@@ -463,89 +502,84 @@ function InterviewContent() {
 
     return (
         <div className="flex flex-col h-screen bg-gray-50">
-            {/* Header */}
-            <header className="bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center">
-                <div className="flex items-center">
-                    <button
-                        onClick={handleBackClick}
-                        className="mr-4 text-gray-600 hover:text-gray-900"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                        </svg>
-                    </button>
-                    <h1 className="text-xl font-semibold">AI Interview Session</h1>
-                </div>
-                <div className="flex items-center space-x-4">
-                    <div className={`px-3 py-1 rounded-full text-sm ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {isConnected ? 'Connected' : 'Disconnected'}
-                    </div>
-                    {interviewId && (
-                        <div className="text-sm text-gray-600">ID: {interviewId}</div>
-                    )}
-                </div>
-            </header>
-
-            {/* Chat Area */}
-            <div
-                ref={chatContainerRef}
-                className="flex-1 p-4 overflow-y-auto"
-            >
-                {messages.map((message, index) => (
-                    <div
-                        key={index}
-                        className={`mb-4 p-3 rounded-lg max-w-3xl ${message.type === 'user'
-                                ? 'ml-auto bg-blue-100 text-blue-900'
-                                : message.type === 'ai'
-                                    ? 'bg-gray-100 text-gray-900'
-                                    : 'mx-auto bg-yellow-100 text-yellow-900 text-sm'
-                            }`}
-                    >
-                        <div className="font-semibold mb-1">
-                            {message.type === 'user' ? 'You' : message.type === 'ai' ? 'AI Interviewer' : 'System'}:
-                        </div>
-                        <div>{message.content}</div>
-                    </div>
-                ))}
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center">
+            <div className="flex items-center">
+              <button
+                onClick={handleBackClick}
+                className="mr-4 text-gray-600 hover:text-gray-900"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </button>
+              <h1 className="text-xl font-semibold">AI Interview Session</h1>
             </div>
-
-            {/* Transcript Area */}
-            <div className="bg-gray-50 border-t border-gray-200 p-4">
-                <div className="mb-2 flex justify-between items-center">
-                    <div className="text-sm font-medium text-gray-700">
-                        {statusMessage}
-                    </div>
-                    <div className={`text-sm font-medium px-2 py-1 rounded ${isListening ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                        Microphone: {isListening ? 'On' : 'Off'}
-                    </div>
-                </div>
-
-                {/* Transcript */}
-                <div className="bg-white border border-gray-200 rounded-lg p-3 mb-4 min-h-[60px] max-h-[120px] overflow-y-auto">
-                    {transcript || (isListening ? "Speak now..." : "Your speech will appear here...")}
-                </div>
-
-                {/* Controls */}
-                <div className="flex justify-center">
-                    <button
-                        onClick={toggleMicrophoneAndSend}
-                        disabled={!isConnected || isAISpeaking}
-                        className={`px-4 py-2 rounded-lg font-medium ${isListening
-                                ? 'bg-red-600 hover:bg-red-700 text-white'
-                                : 'bg-blue-600 hover:bg-blue-700 text-white'
-                            } ${(!isConnected || isAISpeaking) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        {isListening ? 'Send Response & Turn Off Mic' : 'Turn On Microphone'}
-                    </button>
-                </div>
+            <div className="flex items-center space-x-4">
+              <div
+                className={`px-3 py-1 rounded-full text-sm ${
+                  isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}
+              >
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </div>
+              {interviewId && <div className="text-sm text-gray-600">ID: {interviewId}</div>}
             </div>
+          </header>
+    
+          {/* Chat Area – only AI messages rendered */}
+          <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto">
+            {messages
+              .filter((m) => m.type === 'ai')
+              .map((message, index) => (
+                <div
+                  key={index}
+                  className="mb-4 p-3 rounded-lg w-1/2 bg-gray-100 text-gray-900"
+                >
+                  <div className="font-semibold mb-1">AI Interviewer:</div>
+                  <div>{message.content}</div>
+                </div>
+              ))}
+          </div>
+    
+          {/* Recording Status & Controls */}
+          <div className="bg-gray-50 border-t border-gray-200 p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-gray-700 flex-1">
+                {statusMessage}
+              </div>
+              <MicIndicator isRecording={isRecording} isAISpeaking={isAISpeaking} />
+            </div>
+    
+            <div className="flex justify-center">
+              <button
+                onClick={toggleRecording}
+                disabled={!isConnected || isAISpeaking}
+                className={`px-6 py-3 rounded-lg font-medium transition-all shadow-lg ${
+                  isRecording
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                } ${!isConnected || isAISpeaking ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {isRecording ? 'Stop Recording & Send' : 'Start Recording'}
+              </button>
+            </div>
+          </div>
         </div>
-    );
-}
-export default function InterviewPage() {
-    return (
+      );
+    }
+    
+    export default function InterviewPage() {
+      return (
         <Suspense fallback={<div className="flex justify-center items-center h-screen">Loading...</div>}>
-            <InterviewContent />
+          <InterviewContent />
         </Suspense>
-    );
-}
+      );
+    }
+    

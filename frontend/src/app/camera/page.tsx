@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 import React, { useState, useEffect, useRef } from 'react';
@@ -59,31 +60,21 @@ export default function AntiCheatMonitor() {
   useEffect(() => {
     // If the interview has started, track the tab visibility and window focus changes
     if (interviewStarted) {
-      const handleTabChange = () => {
-        // Only count when tab becomes hidden (user switches away)
-        if (document.hidden && !isTabHiddenRef.current) {
-          isTabHiddenRef.current = true;
-          incrementTabChanges();
-        } else if (!document.hidden) {
-          // Tab becomes visible again
-          isTabHiddenRef.current = false;
-        }
-      };
-
-      const handleWindowFocus = () => {
-        if (!isWindowFocusedRef.current) {
-          isWindowFocusedRef.current = true;
-        }
-      };
-
-      const handleWindowBlur = () => {
-        if (isWindowFocusedRef.current) {
-          isWindowFocusedRef.current = false;
-          incrementTabChanges();
-        }
-      };
-
+      let switchTimeout: NodeJS.Timeout | null = null;
+      let hasSwitched = false;
+  
       const incrementTabChanges = () => {
+        // Prevent multiple increments within a short time frame
+        if (hasSwitched) return;
+        
+        hasSwitched = true;
+        
+        // Reset the flag after a short delay
+        if (switchTimeout) clearTimeout(switchTimeout);
+        switchTimeout = setTimeout(() => {
+          hasSwitched = false;
+        }, 100); // 100ms debounce
+        
         setTabChanges((prev) => {
           const newTabChanges = prev + 1;
           
@@ -116,17 +107,49 @@ export default function AntiCheatMonitor() {
           return newTabChanges;
         });
       };
-
+  
+      const handleTabChange = () => {
+        // Only count when tab becomes hidden (user switches away)
+        if (document.hidden && !isTabHiddenRef.current) {
+          isTabHiddenRef.current = true;
+          incrementTabChanges();
+        } else if (!document.hidden) {
+          // Tab becomes visible again
+          isTabHiddenRef.current = false;
+        }
+      };
+  
+      const handleWindowFocus = () => {
+        if (!isWindowFocusedRef.current) {
+          isWindowFocusedRef.current = true;
+        }
+      };
+  
+      const handleWindowBlur = () => {
+        // Only count window blur if tab is still visible (pure window switch)
+        if (isWindowFocusedRef.current && !document.hidden) {
+          isWindowFocusedRef.current = false;
+          incrementTabChanges();
+        }
+        // Update the ref even if we don't count (for consistency)
+        if (isWindowFocusedRef.current) {
+          isWindowFocusedRef.current = false;
+        }
+      };
+  
       // Track tab visibility change
       document.addEventListener('visibilitychange', handleTabChange);
       // Track window focus changes
       window.addEventListener('focus', handleWindowFocus);
       window.addEventListener('blur', handleWindowBlur);
-
+  
       return () => {
         document.removeEventListener('visibilitychange', handleTabChange);
         window.removeEventListener('focus', handleWindowFocus);
         window.removeEventListener('blur', handleWindowBlur);
+        if (switchTimeout) {
+          clearTimeout(switchTimeout);
+        }
         if (wsRef.current) {
           wsRef.current.close();
         }
@@ -138,37 +161,37 @@ export default function AntiCheatMonitor() {
   }, [interviewStarted]);
 
   // Check violation rate and show warnings
-  useEffect(() => {
-    if (metrics && metrics.total_violation_rate > 0) {
-      const rate = metrics.total_violation_rate;
+  // useEffect(() => {
+  //   if (metrics && metrics.total_violation_rate > 0) {
+  //     const rate = metrics.total_violation_rate;
       
-      if (rate >= 60 && lastViolationWarningLevel < 60) {
-        setViolationWarningType('final');
-        setViolationWarningTitle('Interview Terminated - Unethical Practice');
-        setViolationWarningMessage(`Your violation rate is ${rate.toFixed(1)}%. You were found engaging in unethical practices. Your interview is now cancelled and you will be redirected in 5 seconds.`);
-        setShowViolationWarning(true);
-        setLastViolationWarningLevel(60);
+  //     if (rate >= 60 && lastViolationWarningLevel < 60) {
+  //       setViolationWarningType('final');
+  //       setViolationWarningTitle('Interview Terminated - Unethical Practice');
+  //       setViolationWarningMessage(`Your violation rate is ${rate.toFixed(1)}%. You were found engaging in unethical practices. Your interview is now cancelled and you will be redirected in 5 seconds.`);
+  //       setShowViolationWarning(true);
+  //       setLastViolationWarningLevel(60);
         
-        // Disconnect and redirect
-        setTimeout(() => {
-          disconnectWebSocket();
-          window.location.href = '/careers';
-        }, 5000);
-      } else if (rate >= 50 && lastViolationWarningLevel < 50) {
-        setViolationWarningType('danger');
-        setViolationWarningTitle('Strict Warning - High Violation Rate');
-        setViolationWarningMessage(`Your violation rate is ${rate.toFixed(1)}%. This is extremely concerning. Please maintain proper interview conduct or your interview may be terminated.`);
-        setShowViolationWarning(true);
-        setLastViolationWarningLevel(50);
-      } else if (rate >= 40 && lastViolationWarningLevel < 40) {
-        setViolationWarningType('warning');
-        setViolationWarningTitle('Warning - Elevated Violation Rate');
-        setViolationWarningMessage(`Your violation rate is ${rate.toFixed(1)}%. Please maintain proper interview conduct and stay focused on the camera.`);
-        setShowViolationWarning(true);
-        setLastViolationWarningLevel(40);
-      }
-    }
-  }, [metrics, lastViolationWarningLevel]);
+  //       // Disconnect and redirect
+  //       setTimeout(() => {
+  //         disconnectWebSocket();
+  //         window.location.href = '/careers';
+  //       }, 5000);
+  //     } else if (rate >= 50 && lastViolationWarningLevel < 50) {
+  //       setViolationWarningType('danger');
+  //       setViolationWarningTitle('Strict Warning - High Violation Rate');
+  //       setViolationWarningMessage(`Your violation rate is ${rate.toFixed(1)}%. This is extremely concerning. Please maintain proper interview conduct or your interview may be terminated.`);
+  //       setShowViolationWarning(true);
+  //       setLastViolationWarningLevel(50);
+  //     } else if (rate >= 40 && lastViolationWarningLevel < 40) {
+  //       setViolationWarningType('warning');
+  //       setViolationWarningTitle('Warning - Elevated Violation Rate');
+  //       setViolationWarningMessage(`Your violation rate is ${rate.toFixed(1)}%. Please maintain proper interview conduct and stay focused on the camera.`);
+  //       setShowViolationWarning(true);
+  //       setLastViolationWarningLevel(40);
+  //     }
+  //   }
+  // }, [metrics, lastViolationWarningLevel]);
 
   const connectWebSocket = () => {
     if (isConnecting) return;
