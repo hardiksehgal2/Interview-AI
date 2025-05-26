@@ -595,7 +595,11 @@ function InterviewContent() {
 
             addSystemMessage(closeMessage);
             // setShowInterviewComplete(true);
-
+            if (event.code === 1000) {
+                setShowInterviewComplete(true); // interview ended normally
+                stopRecording();
+                stopLocalCamera()
+            }
             if (isRecording) {
                 stopRecording();
             }
@@ -863,7 +867,15 @@ function InterviewContent() {
     const dialogStyles = getDialogStyles(warningType);
     const distanceStatus = metrics ? getFaceDistanceStatus(metrics.face_size_ratio) : { status: 'No data', color: 'text-gray-500' };
     const violationLevel = metrics ? getViolationLevel(metrics.total_violation_rate) : { level: 'No data', color: 'text-gray-500', bgColor: 'bg-gray-50' };
-
+    // useEffect(() => {
+    //     const lastAiMessage = messages
+    //         .filter((m) => m.type === 'ai')
+    //         .slice(-1)[0];
+    
+    //     if (lastAiMessage && lastAiMessage.content.includes(interviewId)) {
+    //         setShowInterviewComplete(true);
+    //     }
+    // }, [messages, interviewId]);
     return (
         <div className="flex flex-col h-screen bg-gray-50">
             <Toaster

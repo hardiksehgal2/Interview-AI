@@ -11,12 +11,12 @@ from services.tts_services import text_to_speech_sarvam_base64_array
 from services.model_schema import InterviewDataStorage, JDCreate, InterviewSummaryResponse
 from services.mongo_op import connect_to_mongo, close_mongo_connection, save_resume, save_interview_data, get_resume_by_jd, get_jd_by_id, get_interview_data_by_id, get_jd_by_domain, save_jd, update_interview_data
 from services.asr_services import transcribe_audio
-import json
-import cv2
-import numpy as np
-import time
+from services.camera import OpenCVAntiCheat
 import json
 import base64
+import cv2
+import numpy as np
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,8 +26,7 @@ async def lifespan(app: FastAPI):
     print("Application shutdown: MongoDB connection closed.")
 
 
-app = FastAPI(title="AI Interview Assistant API",
-              lifespan=lifespan, root_path="/api")
+app = FastAPI(title="AI Interview Assistant API", lifespan=lifespan, root_path="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,18 +35,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
-
-# # Root endpoint to serve the frontend
-# @app.get("/")
-# async def read_root():
-#     # Redirect to the index.html
-#     return FileResponse("frontend/index.html")
-
 
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "message": "AI Interview Assistant API is running"}
+
 
 @app.post("/jd/", tags=["Job Descriptions"])
 async def upload_job_description(jd: JDCreate):
@@ -157,15 +149,13 @@ async def websocket_interview_endpoint(websocket: WebSocket, interview_id: str):
         await websocket.close(code=1008)
         return
 
-    current_question_index = 0
-    follow_up_mode = False
     total_questions = len(interview_data.get("interview_questions", []))
 
     message_history = []
 
     try:
         if total_questions > 0:
-            current_question = interview_data["interview_questions"][current_question_index]
+            current_question = interview_data["interview_questions"][0]
 
             message_history.append({"role": "assistant", "content": current_question})
 
@@ -182,25 +172,24 @@ async def websocket_interview_endpoint(websocket: WebSocket, interview_id: str):
         while True:
             candidate_response_audio = await websocket.receive_bytes()
             print(f"Received audio response from candidate for interview {interview_id}, size: {len(candidate_response_audio)} bytes")
-            
+
             audio_size_mb = len(candidate_response_audio) / (1024 * 1024)
             if audio_size_mb > 25:  # Adjust based on your tier
                 await websocket.send_text("ERROR:Audio file too large. Please keep recordings under 25MB.")
                 continue
-            
+
             candidate_response_text = await transcribe_audio(candidate_response_audio)
-            
+
             if not candidate_response_text:
                 await websocket.send_text("ERROR:Failed to transcribe audio. Please try speaking again.")
                 continue
-            
-            print(f"\n\nTranscribed (via Groq for {interview_id}): {candidate_response_text}\n\n")
 
+            print(f"\n\nTranscribed (via Groq for {interview_id}): {candidate_response_text}\n\n")
 
             message_history.append({"role": "user", "content": candidate_response_text})
 
-            is_last_question = current_question_index == total_questions - 1
-            if is_last_question and follow_up_mode:
+            next_question_text = await get_follow_up_question(message_history, interview_data)
+            if '[END]' in next_question_text:
                 closing_text = f"Thank you for all your thoughtful responses. That concludes our interview today. We'll be in touch regarding next steps.\nInterview ID: {interview_id} use this ID to check your interview status."
 
                 message_history.append({"role": "assistant", "content": closing_text})
@@ -215,27 +204,19 @@ async def websocket_interview_endpoint(websocket: WebSocket, interview_id: str):
                 await asyncio.sleep(1)
                 await websocket.close(code=1000)  # Normal Closure
                 print(f"Interview {interview_id} completed. Closing WebSocket connection.")
-                
+
                 return
 
-            if follow_up_mode:
-                current_question_index += 1
-                follow_up_mode = False
-
-                next_question_text = interview_data["interview_questions"][current_question_index]
             else:
-                next_question_text = await get_follow_up_question(message_history, interview_data)
-                follow_up_mode = True
+                message_history.append({"role": "assistant", "content": next_question_text})
 
-            message_history.append({"role": "assistant", "content": next_question_text})
+                print(f"Next question for {interview_id}: {next_question_text}")
 
-            print(f"Next question for {interview_id}: {next_question_text}")
+                question_audio_array = await text_to_speech_sarvam_base64_array(next_question_text)
+                await websocket.send_text(f"AI_QUESTION_TEXT:{next_question_text}")
 
-            question_audio_array = await text_to_speech_sarvam_base64_array(next_question_text)
-            await websocket.send_text(f"AI_QUESTION_TEXT:{next_question_text}")
-
-            audio_message = {"type": "audio_array", "audios": question_audio_array}
-            await websocket.send_text(f"AI_AUDIO_ARRAY:{json.dumps(audio_message)}")
+                audio_message = {"type": "audio_array", "audios": question_audio_array}
+                await websocket.send_text(f"AI_AUDIO_ARRAY:{json.dumps(audio_message)}")
 
     except WebSocketDisconnect:
         print(f"Client disconnected from interview {interview_id}")
@@ -268,6 +249,7 @@ async def get_interview_summary(interview_id: str):
         response = {
             "candidate_name": "",
             "candidate_email": "",
+            "message_history": [],
             "status": "unknown",
             "analysis": None,
         }
@@ -277,6 +259,7 @@ async def get_interview_summary(interview_id: str):
             response["candidate_email"] = interview_data.get("candidate_email", "")
             response["status"] = interview_data.get("status", "unknown")
             response["analysis"] = interview_data.get("analysis")
+            response["message_history"] = interview_data.get("message_history")
             
         return response
         
@@ -288,259 +271,55 @@ async def get_interview_summary(interview_id: str):
         raise HTTPException(status_code=500, detail=f"Error retrieving interview data: {str(e)}")
 
 
-class OpenCVAntiCheat:
-    def __init__(self):
-        # These cascades come with OpenCV - no extra downloads needed
-        self.face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        self.profile_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_profileface.xml')
-
-        # Violation tracking (No eye-related violations)
-        self.violations = {
-            'no_face': 0,
-            'multiple_faces': 0,
-            'looking_away': 0,
-            'too_close': 0,
-            'too_far': 0
-        }
-
-        self.total_frames = 0
-        self.start_time = time.time()
-
-        # For movement detection
-        self.prev_face_center = None
-        self.movement_threshold = 50
-
-    def analyze_face_position(self, face, frame_shape):
-        """Analyze if person is looking straight or away"""
-        x, y, w, h = face
-
-        # Face center
-        face_center_x = x + w // 2
-        face_center_y = y + h // 2
-
-        # Frame center
-        frame_center_x = frame_shape[1] // 2
-        frame_center_y = frame_shape[0] // 2
-
-        # Calculate deviations
-        horizontal_deviation = abs(face_center_x - frame_center_x)
-        vertical_deviation = abs(face_center_y - frame_center_y)
-
-        # Normalize by frame size
-        h_dev_ratio = horizontal_deviation / frame_shape[1]
-        v_dev_ratio = vertical_deviation / frame_shape[0]
-
-        # Check if looking straight (face centered)
-        looking_straight = h_dev_ratio < 0.2 and v_dev_ratio < 0.15
-
-        return {
-            'looking_straight': looking_straight,
-            'horizontal_deviation': h_dev_ratio,
-            'vertical_deviation': v_dev_ratio,
-            'face_center': (face_center_x, face_center_y)
-        }
-    def process_image_data(self, image_bytes):
-        """Process image data sent from frontend"""
-        try:
-            # Convert bytes to OpenCV image
-            nparr = np.frombuffer(image_bytes, np.uint8)
-            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            
-            if frame is None:
-                return None, None
-            
-            # Use existing processing logic
-            processed_frame, metrics = self.process_frame(frame)
-            
-            # Convert back to base64 for frontend
-            _, buffer = cv2.imencode('.jpg', processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-            frame_base64 = base64.b64encode(buffer).decode('utf-8')
-            
-            return frame_base64, metrics
-            
-        except Exception as e:
-            print(f"Error processing image: {e}")
-            return None, None
-    def analyze_face_size(self, face, frame_shape):
-        """Determine if person is too close or too far"""
-        x, y, w, h = face
-
-        # Face area vs frame area
-        face_area = w * h
-        frame_area = frame_shape[0] * frame_shape[1]
-        face_ratio = face_area / frame_area
-
-        # Classification
-        if face_ratio < 0.02:
-            return 'too_far', face_ratio
-        elif face_ratio > 0.35:
-            return 'too_close', face_ratio
-        else:
-            return 'good_distance', face_ratio
-
-    def check_profile_face(self, gray_frame):
-        """Check if person turned to profile (side view)"""
-        profiles = self.profile_cascade.detectMultiScale(gray_frame, 1.3, 5)
-        return len(profiles) > 0
-
-    def process_frame(self, frame):
-        """Main processing function"""
-        self.total_frames += 1
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        # Detect frontal faces
-        faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
-
-        violations_this_frame = []
-        metrics = {}
-
-        if len(faces) == 0:
-            # Check for profile faces
-            profile_detected = self.check_profile_face(gray)
-
-            if profile_detected:
-                violations_this_frame.append("Person turned to side profile")
-                self.violations['looking_away'] += 1
-                metrics['face_detected'] = True
-                metrics['looking_straight'] = False
-            else:
-                violations_this_frame.append("No face detected")
-                self.violations['no_face'] += 1
-                metrics['face_detected'] = False
-                metrics['looking_straight'] = False
-
-            metrics['face_size_ratio'] = 0.0
-
-        elif len(faces) > 1:
-            # Multiple faces
-            violations_this_frame.append("Multiple faces detected")
-            self.violations['multiple_faces'] += 1
-
-            # Use largest face
-            largest_face = max(faces, key=lambda f: f[2] * f[3])
-            faces = [largest_face]
-
-        if len(faces) == 1:
-            face = faces[0]
-            x, y, w, h = face
-
-            # Draw face rectangle
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-            metrics['face_detected'] = True
-
-            # Analyze face position (gaze direction)
-            position_analysis = self.analyze_face_position(face, frame.shape)
-            metrics['looking_straight'] = bool(
-                position_analysis['looking_straight'])
-            metrics['horizontal_deviation'] = float(
-                position_analysis['horizontal_deviation'])
-
-            if not position_analysis['looking_straight']:
-                violations_this_frame.append("Not looking straight at camera")
-                self.violations['looking_away'] += 1
-
-            # Analyze face size (distance)
-            distance_status, face_ratio = self.analyze_face_size(
-                face, frame.shape)
-            metrics['face_size_ratio'] = float(face_ratio)
-
-            if distance_status == 'too_far':
-                violations_this_frame.append("Sitting too far from camera")
-                self.violations['too_far'] += 1
-            elif distance_status == 'too_close':
-                violations_this_frame.append("Sitting too close to camera")
-                self.violations['too_close'] += 1
-
-            # Track movement (excessive movement detection)
-            current_center = position_analysis['face_center']
-            if self.prev_face_center is not None:
-                movement = np.sqrt((current_center[0] - self.prev_face_center[0]) ** 2 +
-                                   (current_center[1] - self.prev_face_center[1]) ** 2)
-                if movement > self.movement_threshold:
-                    violations_this_frame.append("Excessive movement detected")
-
-            self.prev_face_center = current_center
-
-        # Calculate overall metrics
-        total_violations = sum(self.violations.values())
-        violation_rate = (total_violations / self.total_frames) * \
-            100 if self.total_frames > 0 else 0
-        session_duration = time.time() - self.start_time
-
-        # Compile final metrics - ensure all values are JSON serializable
-        metrics.update({
-            'current_violations': violations_this_frame,
-            'violation_count': int(len(violations_this_frame)),
-            'total_violation_rate': float(round(violation_rate, 2)),
-            'session_duration': float(round(session_duration, 1)),
-            'total_frames': int(self.total_frames),
-            'violations_breakdown': {k: int(v) for k, v in self.violations.items()}
-        })
-
-        # Add visual indicators to frame
-        self.add_visual_feedback(frame, violations_this_frame, metrics)
-
-        return frame, metrics
-
-    def add_visual_feedback(self, frame, violations, metrics):
-        """Add text and visual feedback to frame"""
-        # Status indicator in top-right
-        status_color = (0, 255, 0) if len(violations) == 0 else (0, 0, 255)
-        status_text = "✓ OK" if len(
-            violations) == 0 else f"⚠ {len(violations)} Issues"
-        cv2.putText(frame, status_text, (frame.shape[1] - 150, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-
-        # List violations
-        y_offset = 30
-        for violation in violations:
-            cv2.putText(frame, f"• {violation}", (10, y_offset),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-            y_offset += 20
-
-        # Session stats at bottom
-        stats_text = f"Violations: {sum(self.violations.values())} | Rate: {metrics['total_violation_rate']:.1f}%"
-        cv2.putText(frame, stats_text, (10, frame.shape[0] - 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-        time_text = f"Time: {metrics['session_duration']:.1f}s | Frames: {metrics['total_frames']}"
-        cv2.putText(frame, time_text, (10, frame.shape[0] - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-
-# Global detector
-
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("✅ Client connected for camera processing")
     
-    # Create individual detector for this connection
-    user_detector = OpenCVAntiCheat()
-    
+    detector = OpenCVAntiCheat()
+
     try:
         while True:
+            # Receive image data from frontend
             image_data = await websocket.receive_bytes()
             
-            # Use user-specific detector
-            processed_frame_b64, metrics = user_detector.process_image_data(image_data)
-            
-            if processed_frame_b64 and metrics:
+            # Decode the image from bytes to OpenCV format
+            # Assuming the frontend sends base64-encoded image
+            try:
+                # If receiving base64 string
+                if isinstance(image_data, str):
+                    image_bytes = base64.b64decode(image_data)
+                else:
+                    # If receiving raw bytes
+                    image_bytes = image_data
+                
+                # Convert bytes to numpy array
+                nparr = np.frombuffer(image_bytes, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                
+                if frame is None:
+                    print("Failed to decode image")
+                    continue
+                
+                # Process the frame
+                processed_frame, metrics = detector.process_frame(frame)
+                
+                # Encode the processed frame back to base64
+                _, buffer = cv2.imencode('.jpg', processed_frame)
+                processed_frame_b64 = base64.b64encode(buffer).decode('utf-8')
+                
+                # Send response
                 response_data = {
                     'frame': processed_frame_b64,
                     'metrics': metrics
                 }
                 await websocket.send_text(json.dumps(response_data))
+                
+            except Exception as e:
+                print(f"Error processing frame: {e}")
+                continue
             
     except WebSocketDisconnect:
         print("Client disconnected from camera processing")
     except Exception as e:
         print(f"WebSocket error: {e}")
-if __name__ == "__main__":
-    import uvicorn
-    print("🚀 Starting AI Interview Backend...")
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

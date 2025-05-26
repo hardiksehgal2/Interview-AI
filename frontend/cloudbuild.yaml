@@ -1,0 +1,13 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '--build-arg' # This tells Docker to expect a build argument
+  - 'NEXT_PUBLIC_API_BASE_URL=${_NEXT_PUBLIC_API_BASE_URL}' # Passes the substitution to Docker
+  - '-t'
+  - 'asia-south1-docker.pkg.dev/ai-interview-460814/backend-repo/my-static-frontend:latest'
+  - '.'
+substitutions:
+  _NEXT_PUBLIC_API_BASE_URL: 'https://my-backend-service-873829650882.asia-south1.run.app/api' # Default value
+images:
+- 'asia-south1-docker.pkg.dev/ai-interview-460814/backend-repo/my-static-frontend:latest'

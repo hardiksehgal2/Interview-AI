@@ -69,7 +69,7 @@ interface ProcessFlowProps {
 
 const ProcessFlow: React.FC<ProcessFlowProps> = ({ items }) => {
     return (
-        <div className="w-full bg-gradient-to-br rounded-xl from-gray-900 via-indigo-900 to-black py-12 px-4">
+        <div className="w-full bg-gradient-to-br rounded-xl from-gray-900 via-indigo-900 to-black py-12 px-8 lg:px-16">
             <div className="max-w-7xl rounded-xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
                 {items.map((item, index) => (
                     <ProcessCard
@@ -86,16 +86,7 @@ const ProcessFlow: React.FC<ProcessFlowProps> = ({ items }) => {
     );
 };
 
-// Shimmer component
-const Shimmer = () => (
-    <div className="space-y-4">
-        <div className="bg-gray-700 rounded-full w-12 h-12 animate-shimmer"></div>
-        <div className="h-6 bg-gray-700 rounded w-3/4 animate-shimmer"></div>
-        <div className="h-4 bg-gray-700 rounded w-full animate-shimmer"></div>
-        <div className="h-4 bg-gray-700 rounded w-full animate-shimmer"></div>
-        <div className="h-4 bg-gray-700 rounded w-5/6 animate-shimmer"></div>
-    </div>
-);
+
 
 // Example implementation
 const ResearchFlow: React.FC = () => {
@@ -171,7 +162,7 @@ const ResearchFlow: React.FC = () => {
     ];
 
     return (
-        <div className="bg-transparent">
+        <div id="features" className="bg-transparent">
             <style jsx global>{`
                 @keyframes shimmer {
                     0% {

@@ -4,7 +4,7 @@ import React from 'react';
 const CareerIntro = () => {
   const words = [
     { text: "Grow Your Career at", className: "text-2xl md:text-4xl lg:text-5xl font-extrabold" },
-    { text: "JustHire", className: "text-purple-600 text-2xl md:text-4xl lg:text-5xl font-extrabold" },
+    { text: "JustHired", className: "text-purple-600 text-2xl md:text-4xl lg:text-5xl font-extrabold" },
   ];
   const words2 = [
     { text: "Where Talent Thrives", className: "text-2xl md:text-4xl lg:text-5xl font-extrabold" },

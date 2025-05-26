@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { TypewriterEffectSmooth } from '@/components/ui/typewriter-effect'
 import AxiosInstances from '@/services/AxiosInstance'
 import { useRouter } from 'next/navigation'
+import { JobCardSkeleton } from '@/components/Shimmer'
 
 // Define job interface with TypeScript types
 interface Job {
@@ -14,12 +15,10 @@ interface Job {
 }
 
 // Words for typewriter effect
-const words = [
-    { text: "Apply Now ", className: "text-2xl lg:text-4xl text-center font-extrabold" },
-];
+
 
 export default function JobsListing() {
-  const router = useRouter();
+    const router = useRouter();
 
     // State for job listings with proper typing
     const [jobs, setJobs] = useState<Job[]>([]);
@@ -35,7 +34,7 @@ export default function JobsListing() {
         const fetchJobs = async () => {
             try {
                 setLoading(true);
-                const response = await AxiosInstances.get('/jd/all');
+                const response = await AxiosInstances.get('/jd/all/');
 
                 if (response.data && response.data.length > 0) {
                     setJobs(response.data);
@@ -101,10 +100,7 @@ export default function JobsListing() {
     return (
         <div className="bg-white mx-auto px-4 md:px-16 py-8">
             <div className="flex justify-center mb-6">
-                <TypewriterEffectSmooth
-                    words={words}
-                    className="text-lg md:text-2xl text-center"
-                />
+                <h3 className="text-3xl font-bold text-gray-900 mb-8 text-center">Apply Now</h3>
             </div>
 
             {/* Filter navigation */}
@@ -114,8 +110,8 @@ export default function JobsListing() {
                         key={option}
                         onClick={() => setActiveFilter(option)}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${activeFilter === option
-                                ? 'bg-gray-900 text-white'
-                                : 'bg-white text-gray-800 border border-gray-300 hover:bg-gray-100'
+                            ? 'bg-gray-900 text-white'
+                            : 'bg-white text-gray-800 border border-gray-300 hover:bg-gray-100'
                             }`}
                     >
                         {option}
@@ -126,7 +122,10 @@ export default function JobsListing() {
             {/* Loading state */}
             {loading && (
                 <div className="text-center py-12">
-                    <p className="text-lg text-gray-600">Loading job openings...</p>
+                    <JobCardSkeleton /> 
+
+                    {/* Example: three blocks stacked vertically */}
+                    {/* <Shimmer count={3} heightClass="h-6" direction="col" gapClass="space-y-4" /> */}
                 </div>
             )}
 
@@ -140,7 +139,7 @@ export default function JobsListing() {
                             </h2>
                             <button
                                 onClick={() => handleApply(job.domain, job.id)}
-                                className="inline-flex items-center text-lg font-medium text-gray-900 hover:text-blue-600 transition-colors duration-300 group"
+                                className="inline-flex cursor-pointer items-center text-lg font-medium text-gray-900 hover:text-blue-600 transition-colors duration-300 group"
                             >
                                 Apply <span className="ml-2 transform group-hover:translate-x-1 transition-transform duration-300">↗</span>
                             </button>
@@ -170,7 +169,7 @@ export default function JobsListing() {
 
                             {/* View Details Link */}
                             <button
-                                className="inline-flex items-center px-3 py-1 rounded-full border border-blue-300 text-sm text-blue-600 hover:bg-blue-50 transition-colors duration-300"
+                                className="inline-flex cursor-pointer items-center px-3 py-1 rounded-full border border-blue-300 text-sm text-blue-600 hover:bg-blue-50 transition-colors duration-300"
                                 onClick={() => handleApply(job.domain, job.id)}
 
                             >

@@ -7,7 +7,7 @@ interface FooterProps {
     socialLinks?: {
         name: string;
         url: string;
-        icon: React.ReactNode; // You can use icons from libraries like 'lucide-react'
+        icon: React.ReactNode;
     }[];
     contactEmail?: string;
     address?: string;
@@ -28,9 +28,9 @@ const Footer: React.FC<FooterProps> = ({
     return (
         <>
         <div className='bg-slate-300 w-full h-[1px] '></div>
-        <footer className="bg-slate-100 text-black py-6 md:py-8 ">
+        <footer id="contact" className="bg-slate-100 text-black py-6 md:py-8 ">
             
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="w-full px-4 md:px-16 mx-auto  ">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {/* Company Info */}
                     <div>
@@ -114,10 +114,10 @@ const FooterDemo = () => {
 
     return (
         <Footer
-            companyName="JustHire"
+            companyName="JustHired"
             copyrightYear="2024"
             socialLinks={socialLinks}
-            contactEmail="info@justhire.com"
+            contactEmail="info@justhired.com"
             address="Shivaji Nagar, Bengaluru"
             additionalLinks={additionalLinks}
         />

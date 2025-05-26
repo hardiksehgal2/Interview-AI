@@ -50,9 +50,9 @@ const Intro = () => {
           onClick={handleSubmit}>
           Get Started
         </button>
-        <button className="border-2 border-gray-300 text-gray-700 px-6 py-3 rounded-full font-medium hover:border-gray-400 transition-colors w-full sm:w-auto">
+        {/* <button className="border-2 border-gray-300 text-gray-700 px-6 py-3 rounded-full font-medium hover:border-gray-400 transition-colors w-full sm:w-auto">
           Request a Demo
-        </button>
+        </button> */}
       </div>
     </div>
   );

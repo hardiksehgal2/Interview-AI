@@ -72,7 +72,7 @@ export function JobDetailsContent() {
             try {
                 setLoading(true);
                 // Fetch job by ID
-                const response = await AxiosInstances.get(`/jd/${domain}`);
+                const response = await AxiosInstances.get(`/jd/${domain}/`);
 
                 if (response.data && Array.isArray(response.data) && response.data.length > 0) {
                     // Get the first item from the array
