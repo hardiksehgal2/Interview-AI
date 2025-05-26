@@ -42,12 +42,12 @@ export default function BenefitsSection() {
           }`}
         >
           <h2 className="text-3xl font-bold text-gray-900 mb-4">Benefits & Perks</h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
             We believe in supporting our team with benefits that matter and help you thrive both personally and professionally.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 px-4 md:px-10 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {/* Health Insurance */}
           <div 
             className={`scroll-animate bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all duration-500 hover:shadow-md hover:border-blue-100 transform hover:-translate-y-1 opacity-0 translate-y-10 delay-[100ms] ${
@@ -164,10 +164,10 @@ export default function BenefitsSection() {
         </div>
         
         {/* Additional Perks Section */}
-        <div className={`mt-16 transition-all duration-1000 transform ${
+        <div className={`mt-16 transition-all duration-1000  transform ${
             isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}>
-          <h3 className="text-2xl font-bold text-gray-900 mb-8 text-center">Additional Perks</h3>
+          <h3 className="text-3xl font-bold text-gray-900 mb-8 text-center">Additional Perks</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
             {/* Mental Wellness Program */}
             <div className="p-4 group">

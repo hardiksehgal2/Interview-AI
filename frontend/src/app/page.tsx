@@ -50,18 +50,7 @@ export default function Home() {
       image: "/google.webp"
 
     },
-    // {
-    //   quote:
-    //     "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.",
-    //   name: "Jane Austen",
-    //   title: "Pride and Prejudice",
-    // },
-    // {
-    //   quote:
-    //     "Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world.",
-    //   name: "Herman Melville",
-    //   title: "Moby-Dick",
-    // },
+   
   ];
 
   {/* Your content here */ }
@@ -111,7 +100,7 @@ export default function Home() {
         {/* <SocialProofSection /> */}
         <div className="text-center my-10">
         <SplitText
-          text="JustHire Advantage"
+          text="JustHired Advantage"
           className="text-center text-2xl md:text-4xl  font-bold text-gray-800 "
           delay={50}
           animationFrom={{ opacity: 0, transform: 'translate3d(0,50px,0)' }}

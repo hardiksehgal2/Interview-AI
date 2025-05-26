@@ -61,10 +61,10 @@ const Careers = () => {
                     <BenefitsSection />
                     <div className=' px-8 lg:px-16 '>
 
-                    <JobsListing />
+                        <JobsListing />
                     </div>
                 </div>
-        <FooterDemo/>
+                <FooterDemo />
 
             </ClickSpark>
         </>

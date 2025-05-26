@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @next/next/no-html-link-for-pages */
 "use client";
 import { cn } from "@/lib/utils";
@@ -8,6 +9,7 @@ import {
   useScroll,
   useMotionValueEvent,
 } from "motion/react";
+import  Image  from "next/image";
 
 import React, { useRef, useState } from "react";
 
@@ -21,6 +23,7 @@ interface NavBodyProps {
   children: React.ReactNode;
   className?: string;
   visible?: boolean;
+  hidden?: boolean;
 }
 
 interface NavItemsProps {
@@ -36,6 +39,7 @@ interface MobileNavProps {
   children: React.ReactNode;
   className?: string;
   visible?: boolean;
+  hidden?: boolean;
 }
 
 interface MobileNavHeaderProps {
@@ -57,26 +61,47 @@ export const Navbar = ({ children, className }: NavbarProps) => {
     offset: ["start start", "end start"],
   });
   const [visible, setVisible] = useState<boolean>(false);
+  const [hidden, setHidden] = useState<boolean>(false);
+  const [lastScrollY, setLastScrollY] = useState<number>(0);
 
   useMotionValueEvent(scrollY, "change", (latest) => {
+    // Show background blur after scrolling 100px
     if (latest > 100) {
       setVisible(true);
     } else {
       setVisible(false);
     }
+
+    // Hide/show navbar based on scroll direction
+    if (latest > lastScrollY && latest > 150) {
+      // Scrolling down and past 150px - hide navbar
+      setHidden(true);
+    } else if (latest < lastScrollY) {
+      // Scrolling up - show navbar
+      setHidden(false);
+    }
+
+    setLastScrollY(latest);
   });
 
   return (
     <motion.div
       ref={ref}
-      // IMPORTANT: Change this to class of `fixed` if you want the navbar to be fixed
-      className={cn("sticky inset-x-0 top-20 z-40 w-full", className)}
+      className={cn("fixed inset-x-0 top-0 z-60 w-full", className)}
+      animate={{
+        y: hidden ? -100 : 0,
+      }}
+      transition={{
+        type: "spring",
+        stiffness: 300,
+        damping: 30,
+      }}
     >
       {React.Children.map(children, (child) =>
         React.isValidElement(child)
           ? React.cloneElement(
-              child as React.ReactElement<{ visible?: boolean }>,
-              { visible },
+              child as React.ReactElement<{ visible?: boolean; hidden?: boolean }>,
+              { visible, hidden },
             )
           : child,
       )}
@@ -84,7 +109,7 @@ export const Navbar = ({ children, className }: NavbarProps) => {
   );
 };
 
-export const NavBody = ({ children, className, visible }: NavBodyProps) => {
+export const NavBody = ({ children, className, visible, hidden }: NavBodyProps) => {
   return (
     <motion.div
       animate={{
@@ -93,7 +118,7 @@ export const NavBody = ({ children, className, visible }: NavBodyProps) => {
           ? "0 0 24px rgba(34, 42, 53, 0.06), 0 1px 1px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(34, 42, 53, 0.04), 0 0 4px rgba(34, 42, 53, 0.08), 0 16px 68px rgba(47, 48, 55, 0.05), 0 1px 0 rgba(255, 255, 255, 0.1) inset"
           : "none",
         width: visible ? "40%" : "100%",
-        y: visible ? 20 : 0,
+        y: 0,
       }}
       transition={{
         type: "spring",
@@ -102,9 +127,10 @@ export const NavBody = ({ children, className, visible }: NavBodyProps) => {
       }}
       style={{
         minWidth: "800px",
+        height:"60px"
       }}
       className={cn(
-        "relative z-[60] mx-auto hidden w-full max-w-7xl flex-row items-center justify-between self-start rounded-full bg-transparent px-4 py-2 lg:flex dark:bg-transparent",
+        "relative z-[60] mx-auto hidden w-full max-w-7xl flex-row items-center justify-between self-start rounded-full bg-transparent px-4 py-2 lg:flex dark:bg-transparent mt-5",
         visible && "bg-white/80 dark:bg-neutral-950/80",
         className,
       )}
@@ -146,7 +172,7 @@ export const NavItems = ({ items, className, onItemClick }: NavItemsProps) => {
   );
 };
 
-export const MobileNav = ({ children, className, visible }: MobileNavProps) => {
+export const MobileNav = ({ children, className, visible, hidden }: MobileNavProps) => {
   return (
     <motion.div
       animate={{
@@ -158,7 +184,7 @@ export const MobileNav = ({ children, className, visible }: MobileNavProps) => {
         paddingRight: visible ? "12px" : "0px",
         paddingLeft: visible ? "12px" : "0px",
         borderRadius: visible ? "4px" : "2rem",
-        y: visible ? 20 : 0,
+        y: 0,
       }}
       transition={{
         type: "spring",
@@ -166,7 +192,7 @@ export const MobileNav = ({ children, className, visible }: MobileNavProps) => {
         damping: 50,
       }}
       className={cn(
-        "relative z-50 mx-auto flex w-full max-w-[calc(100vw-2rem)] flex-col items-center justify-between bg-transparent px-0 py-2 lg:hidden",
+        "relative z-50 mx-auto flex w-full max-w-[calc(100vw-2rem)] flex-col items-center justify-between bg-transparent px-0 py-2 lg:hidden mt-2",
         visible && "bg-white/80 dark:bg-neutral-950/80",
         className,
       )}
@@ -236,13 +262,12 @@ export const NavbarLogo = () => {
       href="/"
       className="relative z-20 mr-4 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-black"
     >
-      <img
-        src="https://assets.aceternity.com/logo-dark.png"
+      <Image
+        src="/justhired.png"
         alt="logo"
-        width={30}
+        width={100}
         height={30}
       />
-      <span className="font-medium text-black dark:text-white">Startup</span>
     </a>
   );
 };

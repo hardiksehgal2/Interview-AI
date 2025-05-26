@@ -3,16 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
+import AxiosInstances from '@/services/AxiosInstance';
+import { NavbarDemo } from '@/components/NavbarMain';
+import FooterDemo from '@/components/Footer';
 // import { useRouter } from 'next/router';
 
 // Create an axios instance
-const axiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api',
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  }
-});
+
 
 interface FormData {
   email: string;
@@ -103,7 +100,7 @@ const Results: React.FC = () => {
 
     try {
       // Get interview data using the ID
-      const response = await axiosInstance.get<InterviewResult>(`/interview/${formData.interviewId}`);
+      const response = await AxiosInstances.get<InterviewResult>(`/interview/${formData.interviewId}`);
 
       // Check if the email matches
       if (response.data.candidate_email.toLowerCase() !== formData.email.toLowerCase()) {
@@ -173,9 +170,11 @@ const Results: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <>
+      <NavbarDemo />
+    <div className="min-h-screen pt-20 bg-gradient-to-br from-white to-white ">
       {!interviewResult ? (
-        <div className={`container mx-auto px-4 py-16 max-w-md transition-all duration-700 transform ${shouldAnimate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div className={`container mx-auto px-4 py-16 max-w-lg transition-all duration-700 transform ${shouldAnimate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-8 text-center">
               <h1 className="text-3xl font-bold text-white mb-2">Interview Results</h1>
@@ -227,8 +226,8 @@ const Results: React.FC = () => {
 
               {message.text && (
                 <div className={`p-4 rounded-lg text-sm animate-fadeIn ${message.type === 'success' ? 'bg-green-100 text-green-800' :
-                    message.type === 'error' ? 'bg-red-100 text-red-800' :
-                      'bg-blue-100 text-blue-800'
+                  message.type === 'error' ? 'bg-red-100 text-red-800' :
+                    'bg-blue-100 text-blue-800'
                   }`}>
                   {message.text}
                 </div>
@@ -261,8 +260,8 @@ const Results: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className={`container mx-auto px-4 py-16 transition-all duration-700 transform ${shouldAnimate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-          <div className="max-w-4xl mx-auto">
+        <div className={`container mx-auto w-full py-16 transition-all duration-700 transform ${shouldAnimate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <div className="px-8 lg:px-16 w-full mx-auto">
             <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-8">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
@@ -272,8 +271,8 @@ const Results: React.FC = () => {
                   </div>
                   <div className="mt-4 md:mt-0">
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${interviewResult.status === 'summary_generated' ? 'bg-green-100 text-green-800' :
-                        interviewResult.status === 'summary_error' ? 'bg-red-100 text-red-800' :
-                          'bg-blue-100 text-blue-800'
+                      interviewResult.status === 'summary_error' ? 'bg-red-100 text-red-800' :
+                        'bg-blue-100 text-blue-800'
                       }`}>
                       {interviewResult.status === 'summary_generated' ? 'Analysis Complete' :
                         interviewResult.status === 'summary_error' ? 'Analysis Failed' :
@@ -286,8 +285,8 @@ const Results: React.FC = () => {
               <div className="p-8">
                 {message.text && (
                   <div className={`p-4 mb-6 rounded-lg text-sm animate-fadeIn ${message.type === 'success' ? 'bg-green-100 text-green-800' :
-                      message.type === 'error' ? 'bg-red-100 text-red-800' :
-                        'bg-blue-100 text-blue-800'
+                    message.type === 'error' ? 'bg-red-100 text-red-800' :
+                      'bg-blue-100 text-blue-800'
                     }`}>
                     {message.text}
                   </div>
@@ -364,36 +363,36 @@ const Results: React.FC = () => {
                     <p>{interviewResult.summary_error || 'Unknown error occurred'}</p>
                   </div>
                 )}
-            {interviewResult.message_history && interviewResult.message_history.length > 0 && (
-              <div className="animate-slideUp mt-20 " style={{ animationDelay: '600ms' }}>
-                <h2 className="text-xl font-semibold text-gray-800 mb-3 border-b pb-2">Interview Transcript</h2>
-                <div className="space-y-4 mt-4">
-                  {interviewResult.message_history.map((message, index) => (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-lg animate-fadeIn ${message.role === 'assistant'
-                          ? 'bg-blue-50 border-l-4 border-blue-400'
-                          : 'bg-gray-50 border-l-4 border-gray-400'
-                        }`}
-                      style={{ animationDelay: `${650 + index * 100}ms` }}
-                    >
-                      <div className="flex items-center mb-2">
-                        <div className={`font-semibold text-sm ${message.role === 'assistant' ? 'text-blue-700' : 'text-gray-700'
-                          }`}>
-                          {message.role === 'assistant' ? 'Interviewer' : 'Candidate'}
+                {interviewResult.message_history && interviewResult.message_history.length > 0 && (
+                  <div className="animate-slideUp mt-20 " style={{ animationDelay: '600ms' }}>
+                    <h2 className="text-xl font-semibold text-gray-800 mb-3 border-b pb-2">Interview Transcript</h2>
+                    <div className="space-y-4 mt-4">
+                      {interviewResult.message_history.map((message, index) => (
+                        <div
+                          key={index}
+                          className={`p-4 rounded-lg animate-fadeIn ${message.role === 'assistant'
+                            ? 'bg-blue-50 border-l-4 border-blue-400'
+                            : 'bg-gray-50 border-l-4 border-gray-400'
+                            }`}
+                          style={{ animationDelay: `${650 + index * 100}ms` }}
+                        >
+                          <div className="flex items-center mb-2">
+                            <div className={`font-semibold text-sm ${message.role === 'assistant' ? 'text-blue-700' : 'text-gray-700'
+                              }`}>
+                              {message.role === 'assistant' ? 'Interviewer' : 'Candidate'}
+                            </div>
+                            <div className="ml-2 text-xs text-gray-500">
+                              {message.role === 'assistant' ? '🤖' : '👤'}
+                            </div>
+                          </div>
+                          <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {message.content}
+                          </div>
                         </div>
-                        <div className="ml-2 text-xs text-gray-500">
-                          {message.role === 'assistant' ? '🤖' : '👤'}
-                        </div>
-                      </div>
-                      <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {message.content}
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
+                )}
                 <div className="flex justify-between mt-8 pt-6 border-t border-gray-200">
                   <button
                     onClick={() => {
@@ -471,6 +470,9 @@ const Results: React.FC = () => {
       `}</style>
 
     </div>
+    <FooterDemo/>
+
+    </>
   );
 };
 
