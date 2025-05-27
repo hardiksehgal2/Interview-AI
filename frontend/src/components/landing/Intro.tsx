@@ -1,35 +1,45 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { TypewriterEffectSmooth } from '../ui/typewriter-effect';
 import { useRouter } from 'next/navigation'
 
 const Intro = () => {
   const router = useRouter();
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Trigger animation when component mounts
+    setIsVisible(true);
+  }, []);
 
   const words = [
     {
-      text: "Generate insights with depth and scale using",
+      text: "AI conducts interviews while you focus on ",
     },
     {
-      text: "AI-interviewers",
+      text: "top talent",
       className: "text-purple-600",
     },
   ];
   const handleSubmit = () => {
     router.push("/careers")
   }
+
   return (
-    <div className="max-w-4xl mx-auto  py-16 flex flex-col items-start text-center md:text-left">
+    <div
+      className={`max-w-4xl mx-auto py-16 flex flex-col items-start text-center md:text-left
+        transition-transform transition-opacity duration-700 ease-out
+        ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-20'}`}
+    >
       {/* Process Steps */}
       <div className="flex gap-2 mb-8 justify-center md:justify-start">
         <div className="bg-amber-200 px-4 py-2 rounded-full text-sm md:text-base text-gray-800 font-medium">
-          Interview
+         AI Interviews
         </div>
         <div className="bg-purple-200 px-4 py-2 rounded-full text-sm md:text-base text-gray-800 font-medium">
-          Analysis
+        Smart Reports
         </div>
         <div className="bg-blue-200 px-4 py-2 rounded-full text-sm md:text-base text-gray-800 font-medium">
-          Get result
+        Instant result
         </div>
       </div>
 
@@ -39,10 +49,9 @@ const Intro = () => {
       </h1>
 
       {/* Subheading */}
-      <div className="text-lg md:text-xl mb-6 text-center md:text-left">
+      <div className="text-lg md:text-2xl mb-6 text-center md:text-left">
         <TypewriterEffectSmooth words={words} />
       </div>
-
 
       {/* CTA Buttons */}
       <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
@@ -50,9 +59,6 @@ const Intro = () => {
           onClick={handleSubmit}>
           Get Started
         </button>
-        {/* <button className="border-2 border-gray-300 text-gray-700 px-6 py-3 rounded-full font-medium hover:border-gray-400 transition-colors w-full sm:w-auto">
-          Request a Demo
-        </button> */}
       </div>
     </div>
   );

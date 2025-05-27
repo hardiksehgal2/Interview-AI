@@ -107,9 +107,9 @@ const FooterDemo = () => {
     ];
 
     const additionalLinks = [
-    { text: 'Privacy Policy', url: '/privacy' },
-    { text: 'Terms of Service', url: '/terms' },
-    { text: 'About Us', url: '/about' },
+    { text: 'Privacy Policy', url: '#' },
+    { text: 'Terms of Service', url: '#' },
+    { text: 'About Us', url: '#' },
   ];
 
     return (
