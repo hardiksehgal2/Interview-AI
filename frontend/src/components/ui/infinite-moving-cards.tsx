@@ -14,7 +14,7 @@ export const InfiniteMovingCards = ({
   items: {
     quote: string;
     name: string;
-    title: string;
+    title?: string;
     image?: string;
   }[];
   direction?: "left" | "right";
@@ -94,7 +94,7 @@ export const InfiniteMovingCards = ({
       >
         {items.map((item, idx) => (
           <li
-            className="relative w-[350px] max-w-full shrink-0 rounded-2xl border border-b-0 border-gray-100 bg-white shadow-sm px-8 py-6 md:w-[450px] flex"
+            className="relative w-[350px] max-w-full shrink-0 rounded-2xl border border-b-0 border-gray-100 bg-white shadow-sm px-8 py-6 md:w-[450px] flex hover:shadow-lg hover:scale-[1.02] transition-all duration-300"
             key={item.name + idx}
           >
             {/* Image section */}
@@ -129,9 +129,7 @@ export const InfiniteMovingCards = ({
                   <span className="text-sm leading-[1.6] font-semibold text-gray-900">
                     {item.name}
                   </span>
-                  <span className="text-sm leading-[1.6] font-normal text-gray-500">
-                    {item.title}
-                  </span>
+                 
                 </span>
               </div>
             </blockquote>
