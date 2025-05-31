@@ -148,6 +148,11 @@ async def websocket_interview_endpoint(websocket: WebSocket, interview_id: str):
         await websocket.send_text(f"ERROR:Interview data not found for ID {interview_id}")
         await websocket.close(code=1008)
         return
+    
+    if interview_data.get("status") in ["interview_completed", "summary_generated"]:
+        await websocket.send_text(f"ERROR:Interview {interview_id} already completed.")
+        await websocket.close(code=1008)
+        return
 
     total_questions = len(interview_data.get("interview_questions", []))
 
@@ -236,7 +241,6 @@ async def websocket_interview_endpoint(websocket: WebSocket, interview_id: str):
             await websocket.close(code=1011)  # Internal Error
         except RuntimeError:
             pass
-
 
 @app.get("/interview/{interview_id}", response_model=InterviewSummaryResponse, tags=["Interviews"])
 async def get_interview_summary(interview_id: str):

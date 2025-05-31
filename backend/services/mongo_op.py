@@ -157,6 +157,10 @@ async def update_interview_data(interview_id: str, status: str, message_history:
     Update interview status and message history in MongoDB
     """
     try:
+        existing_data = await db[INTERVIEW_DATA_COLLECTION].find_one({"_id": ObjectId(interview_id)})
+        if existing_data and existing_data.get("status") in ["interview_completed", "summary_generated"]:
+            return {"error": f"Interview with ID {interview_id} is already completed."}
+        
         result = await db[INTERVIEW_DATA_COLLECTION].update_one(
             {"_id": ObjectId(interview_id)},
             {"$set": {
@@ -173,7 +177,6 @@ async def update_interview_data(interview_id: str, status: str, message_history:
     except Exception as e:
         print(f"Error updating interview data: {str(e)}")
         return {"error": f"Error updating interview data: {str(e)}"}
-
 
 async def update_candidate_report(interview_id: str, analysis_data: Dict[str, Any], status: str):
     try:
