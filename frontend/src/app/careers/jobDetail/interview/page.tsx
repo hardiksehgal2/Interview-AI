@@ -129,6 +129,171 @@ function InterviewContent() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+
+    // Add these new state variables
+    const [waitingForAI, setWaitingForAI] = useState(false);
+    const [recordingCountdown, setRecordingCountdown] = useState<number | null>(null);
+    const [recordingTimeLeft, setRecordingTimeLeft] = useState<number | null>(null);
+    const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const [recordingTimerRef] = useState<{ current: NodeJS.Timeout | null }>({ current: null });
+    const [lastProcessedAIMessageIndex, setLastProcessedAIMessageIndex] = useState(-1);
+    const [, forceUpdate] = useState({});
+
+
+    // Add fullscreen functionality
+    useEffect(() => {
+        const enterFullscreen = async () => {
+            try {
+                if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                } else if ((document.documentElement as any).webkitRequestFullscreen) {
+                    await (document.documentElement as any).webkitRequestFullscreen();
+                } else if ((document.documentElement as any).msRequestFullscreen) {
+                    await (document.documentElement as any).msRequestFullscreen();
+                }
+            } catch (error) {
+                console.log('Fullscreen request failed:', error);
+            }
+        };
+
+        // Enter fullscreen when component mounts
+        enterFullscreen();
+
+        // Exit fullscreen when component unmounts
+        return () => {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(() => { });
+            } else if ((document as any).webkitExitFullscreen) {
+                (document as any).webkitExitFullscreen();
+            } else if ((document as any).msExitFullscreen) {
+                (document as any).msExitFullscreen();
+            }
+        };
+    }, []);
+
+    // Add this cleanup function
+    const cleanupAllResources = () => {
+        // Stop all media tracks
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => {
+                track.stop();
+                track.enabled = false;
+            });
+            streamRef.current = null;
+        }
+
+        // Stop local camera
+        if (localStream) {
+            localStream.getTracks().forEach((track) => {
+                track.stop();
+                track.enabled = false;
+            });
+            setLocalStream(null);
+        }
+
+        // Stop video element
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => {
+                track.stop();
+                track.enabled = false;
+            });
+            videoRef.current.srcObject = null;
+        }
+
+        // Clear frame capture interval
+        if (frameIntervalRef.current) {
+            clearInterval(frameIntervalRef.current);
+            frameIntervalRef.current = null;
+        }
+
+        // Stop media recorder
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            try {
+                mediaRecorderRef.current.stop();
+            } catch (e) {
+                console.log('MediaRecorder stop error:', e);
+            }
+            mediaRecorderRef.current = null;
+        }
+
+        // Close websockets
+        if (interviewWebsocketRef.current) {
+            interviewWebsocketRef.current.close(1000, 'Page navigation');
+            interviewWebsocketRef.current = null;
+        }
+
+        if (cameraWsRef.current) {
+            cameraWsRef.current.close(1000, 'Page navigation');
+            cameraWsRef.current = null;
+        }
+
+        // Clear all intervals
+        if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+        }
+
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+        }
+
+        if (cameraReconnectTimeoutRef.current) {
+            clearTimeout(cameraReconnectTimeoutRef.current);
+            cameraReconnectTimeoutRef.current = null;
+        }
+
+        // Stop audio
+        if (currentAudioSourceRef.current) {
+            try {
+                currentAudioSourceRef.current.stop();
+            } catch (e) {
+                console.log('Audio source stop error:', e);
+            }
+            currentAudioSourceRef.current = null;
+        }
+
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+        }
+
+        // Reset states
+        setIsCapturingFrames(false);
+        setCameraConnected(false);
+        setIsConnected(false);
+    };
+    // Add this useEffect for handling page navigation
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            cleanupAllResources();
+        };
+
+        // const handleVisibilityChange = () => {
+        //     if (document.hidden) {
+        //         // Page is hidden, cleanup resources
+        //         cleanupAllResources();
+        //     }
+        // };
+
+        // Listen for route changes
+        const handleRouteChange = () => {
+            cleanupAllResources();
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        // document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('popstate', handleRouteChange);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            // document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('popstate', handleRouteChange);
+            cleanupAllResources();
+        };
+    }, []);
+
     // Add these functions with your other camera functions
     const startLocalCamera = async () => {
         try {
@@ -137,7 +302,7 @@ function InterviewContent() {
                     width: 320,
                     height: 240,
                     frameRate: { ideal: 5, max: 5 }
-                  }
+                }
             });
 
             setLocalStream(stream);
@@ -199,8 +364,20 @@ function InterviewContent() {
 
     const stopLocalCamera = () => {
         if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
+            localStream.getTracks().forEach(track => {
+                track.stop();
+                track.enabled = false;
+            });
             setLocalStream(null);
+        }
+
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => {
+                track.stop();
+                track.enabled = false;
+            });
+            videoRef.current.srcObject = null;
         }
 
         if (frameIntervalRef.current) {
@@ -222,6 +399,7 @@ function InterviewContent() {
     };
 
     const handleViewResults = () => {
+        cleanupAllResources();
         router.push('/results');
     };
 
@@ -268,6 +446,7 @@ function InterviewContent() {
     }, [interviewId]);
 
     //   Tab/Window monitoring for camera system
+    // Update the tab monitoring useEffect
     useEffect(() => {
         if (monitoringStarted) {
             let switchTimeout: NodeJS.Timeout | null = null;
@@ -289,30 +468,42 @@ function InterviewContent() {
                     if (newTabChanges === 1) {
                         setWarningType('warning');
                         setWarningTitle('First Warning');
-                        setWarningMessage('You have switched tabs/windows once. Please stay focused on the interview. This is your first warning.');
+                        setWarningMessage('You have switched tabs/windows. Please stay focused on the interview. You have 2 more warnings left.');
                         setShowWarning(true);
                     } else if (newTabChanges === 2) {
-                        setWarningType('warning');
-                        setWarningTitle('Second Warning');
-                        setWarningMessage('You have switched tabs/windows twice. Please stay focused on the interview. This is your second warning.');
-                        setShowWarning(true);
-                    } else if (newTabChanges === 3) {
                         setWarningType('danger');
-                        setWarningTitle('Third Warning - Final Warning');
-                        setWarningMessage('You have switched tabs/windows three times. This is your final warning. One more tab/window switch will end your interview.');
+                        setWarningTitle('Second Warning - Final Warning');
+                        setWarningMessage('You have switched tabs/windows twice. This is your final warning. One more tab/window switch will end your interview.');
                         setShowWarning(true);
-                    } else if (newTabChanges >= 4) {
+                    } else if (newTabChanges >= 3) {
                         setWarningType('final');
                         setWarningTitle('Interview Terminated');
-                        setWarningMessage('You have switched tabs/windows four times. Your interview has been terminated. You will be redirected in 5 seconds.');
+                        setWarningMessage('You have switched tabs/windows three times. Your interview has been terminated. You will be redirected in 5 seconds.');
                         setShowWarning(true);
                         setTimeout(() => {
-                            disconnectCameraWebSocket();
-                            window.location.href = '/careers';
+                            cleanupAllResources();
+                            router.push('/careers');
                         }, 5000);
                     }
                     return newTabChanges;
                 });
+            };
+
+            // Try to re-enter fullscreen when tab becomes visible again
+            const tryReenterFullscreen = async () => {
+                if (!document.fullscreenElement) {
+                    try {
+                        if (document.documentElement.requestFullscreen) {
+                            await document.documentElement.requestFullscreen();
+                        } else if ((document.documentElement as any).webkitRequestFullscreen) {
+                            await (document.documentElement as any).webkitRequestFullscreen();
+                        } else if ((document.documentElement as any).msRequestFullscreen) {
+                            await (document.documentElement as any).msRequestFullscreen();
+                        }
+                    } catch (error) {
+                        console.log('Could not re-enter fullscreen:', error);
+                    }
+                }
             };
 
             const handleTabChange = () => {
@@ -321,12 +512,16 @@ function InterviewContent() {
                     incrementTabChanges();
                 } else if (!document.hidden) {
                     isTabHiddenRef.current = false;
+                    // Try to re-enter fullscreen when returning to tab
+                    tryReenterFullscreen();
                 }
             };
 
             const handleWindowFocus = () => {
                 if (!isWindowFocusedRef.current) {
                     isWindowFocusedRef.current = true;
+                    // Try to re-enter fullscreen when window regains focus
+                    tryReenterFullscreen();
                 }
             };
 
@@ -506,12 +701,15 @@ function InterviewContent() {
                 }
             };
 
+            // In setupAudioRecording function, update the onstop handler
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
                 audioChunksRef.current = [];
+                // setWaitingForAI(false);
 
                 if (interviewWebsocketRef.current && interviewWebsocketRef.current.readyState === WebSocket.OPEN) {
                     try {
+                        setWaitingForAI(true); // Add this line
                         const arrayBuffer = await audioBlob.arrayBuffer();
                         const uint8Array = new Uint8Array(arrayBuffer);
 
@@ -522,6 +720,7 @@ function InterviewContent() {
                         console.error('Error sending audio:', error);
                         addSystemMessage('Error sending audio. Please try again.');
                         setStatusMessage('Error sending audio.');
+                        setWaitingForAI(false); // Add this line
                     }
                 } else {
                     addSystemMessage('Connection lost. Your audio was not sent.');
@@ -626,21 +825,33 @@ function InterviewContent() {
         if (message.startsWith('AI_QUESTION_TEXT:')) {
             const questionText = message.substring('AI_QUESTION_TEXT:'.length);
             addAIMessage(questionText);
+            // Reset waitingForAI when we receive AI text
+            setWaitingForAI(false);
+            // Clear any existing countdown when new AI message arrives
+            setRecordingCountdown(null);
+            if (countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
+                countdownIntervalRef.current = null;
+            }
         } else if (message.startsWith('AI_AUDIO_ARRAY:')) {
             const audioArrayData = message.substring('AI_AUDIO_ARRAY:'.length);
             try {
                 const parsedAudioData = JSON.parse(audioArrayData);
                 if (parsedAudioData.type === 'audio_array' && parsedAudioData.audios) {
+                    // Reset waitingForAI when we receive AI audio
+                    setWaitingForAI(false);
                     handleAudioArray(parsedAudioData.audios);
                 }
             } catch (error) {
                 console.error('Error parsing audio array:', error);
                 addSystemMessage('Error processing audio data from server.');
+                setWaitingForAI(false); // Reset on error too
             }
         } else if (message.startsWith('ERROR:')) {
             const errorText = message.substring('ERROR:'.length);
             addSystemMessage(`Server Error: ${errorText}`);
             setStatusMessage(`Server error occurred.`);
+            setWaitingForAI(false); // Reset on error
         } else {
             addSystemMessage(message);
         }
@@ -675,6 +886,9 @@ function InterviewContent() {
 
         if (audioContextRef.current.state === 'suspended') {
             await audioContextRef.current.resume();
+        }
+        if (startIndex === 0) {
+            setWaitingForAI(false);
         }
 
         setIsPlayingQueue(true);
@@ -746,8 +960,20 @@ function InterviewContent() {
     };
 
     const startRecording = () => {
+        if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+        }
+        setRecordingCountdown(null);
+
         if (!mediaRecorderRef.current) {
             addSystemMessage('Audio recording not initialized. Please refresh the page.');
+            return;
+        }
+
+        // Add this check to prevent starting when already recording
+        if (mediaRecorderRef.current.state === 'recording') {
+            console.log('Already recording, skipping start');
             return;
         }
 
@@ -804,12 +1030,7 @@ function InterviewContent() {
     };
 
     const handleBackClick = () => {
-        if (interviewWebsocketRef.current) {
-            interviewWebsocketRef.current.close();
-        }
-        if (cameraWsRef.current) {
-            cameraWsRef.current.close();
-        }
+        cleanupAllResources();
         router.push('/careers');
     };
 
@@ -871,11 +1092,108 @@ function InterviewContent() {
     //     const lastAiMessage = messages
     //         .filter((m) => m.type === 'ai')
     //         .slice(-1)[0];
-    
+
     //     if (lastAiMessage && lastAiMessage.content.includes(interviewId)) {
     //         setShowInterviewComplete(true);
     //     }
     // }, [messages, interviewId]);
+
+    // Add this useEffect after your other useEffects
+    useEffect(() => {
+        if (!isAISpeaking && !isRecording && !waitingForAI && isConnected && messages.length > 0) {
+            // Find the last AI message
+            const aiMessages = messages.map((msg, index) => ({ msg, index })).filter(item => item.msg.type === 'ai');
+            if (aiMessages.length > 0) {
+                const lastAIMessage = aiMessages[aiMessages.length - 1];
+
+                // Check if this is a new AI message we haven't processed
+                if (lastAIMessage.index > lastProcessedAIMessageIndex) {
+                    setLastProcessedAIMessageIndex(lastAIMessage.index);
+
+                    // Clear any existing countdown
+                    if (countdownIntervalRef.current) {
+                        clearInterval(countdownIntervalRef.current);
+                        countdownIntervalRef.current = null;
+                    }
+
+                    // Start 10 second countdown
+                    setRecordingCountdown(10);
+
+                    countdownIntervalRef.current = setInterval(() => {
+                        setRecordingCountdown((prev) => {
+                            console.log('Countdown tick:', prev);
+                            if (prev === null || prev <= 1) {
+                                // Auto-start recording
+                                if (countdownIntervalRef.current) {
+                                    clearInterval(countdownIntervalRef.current);
+                                    countdownIntervalRef.current = null;
+                                }
+
+                                // Trigger recording start
+                                setTimeout(() => {
+                                    console.log('Auto-starting recording');
+                                    startRecording();
+                                }, 100);
+
+                                return null;
+                            }
+                            // Force re-render
+                            forceUpdate({});
+                            return prev - 1;
+                        });
+                    }, 1000);
+                }
+            }
+        }
+
+        return () => {
+            if (countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
+                countdownIntervalRef.current = null;
+            }
+        };
+    }, [isAISpeaking, isRecording, waitingForAI, isConnected, messages, lastProcessedAIMessageIndex]);
+
+    // Add this useEffect for 3-minute recording timer
+    useEffect(() => {
+        if (isRecording) {
+            setRecordingTimeLeft(180); // 3 minutes = 180 seconds
+
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingTimeLeft((prev) => {
+                    if (prev === null || prev <= 1) {
+                        // Auto-stop recording
+                        if (recordingTimerRef.current) {
+                            clearInterval(recordingTimerRef.current);
+                            recordingTimerRef.current = null;
+                        }
+
+                        // Trigger recording stop
+                        setTimeout(() => {
+                            stopRecording();
+                        }, 100);
+
+                        return null;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        } else {
+            // Clear timer when not recording
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current);
+                recordingTimerRef.current = null;
+            }
+            setRecordingTimeLeft(null);
+        }
+
+        return () => {
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current);
+                recordingTimerRef.current = null;
+            }
+        };
+    }, [isRecording]);
     return (
         <div className="flex flex-col h-screen bg-gray-50">
             <Toaster
@@ -926,7 +1244,7 @@ function InterviewContent() {
                     {monitoringStarted && (
                         <div className="bg-indigo-50 border-b border-indigo-200 p-2">
                             <p className="text-xs text-indigo-800">
-                                Tab/Window switches: {tabChanges}/4 (Monitoring active)
+                                Tab/Window switches: {tabChanges}/3 (Monitoring active)
                             </p>
                         </div>
                     )}
@@ -958,13 +1276,18 @@ function InterviewContent() {
                         <div className="flex justify-center">
                             <button
                                 onClick={toggleRecording}
-                                disabled={!isConnected || isAISpeaking}
+                                disabled={!isConnected || isAISpeaking || waitingForAI}
                                 className={`px-6 py-3 rounded-lg font-medium transition-all shadow-lg ${isRecording
                                     ? 'bg-red-600 hover:bg-red-700 text-white'
                                     : 'bg-blue-600 hover:bg-blue-700 text-white'
-                                    } ${!isConnected || isAISpeaking ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    } ${!isConnected || isAISpeaking || waitingForAI ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
-                                {isRecording ? 'Stop Recording & Send' : 'Start Recording'}
+                                {isRecording
+                                    ? `Stop Recording & Send${recordingTimeLeft ? ` (${Math.floor(recordingTimeLeft / 60)}:${(recordingTimeLeft % 60).toString().padStart(2, '0')})` : ''}`
+                                    : recordingCountdown !== null
+                                        ? `Start Recording`
+                                        : 'Start Recording'
+                                }
                             </button>
                         </div>
                     </div>

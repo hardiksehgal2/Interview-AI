@@ -16,20 +16,68 @@ import { useEffect, useState } from "react";
 const handleAnimationComplete = () => {
   console.log("All letters have animated!");
 };
-const LottieView = dynamic(async () => (await import("lottie-react")).default, {
-  ssr: false,
-});
+
+const LottieView = dynamic(
+  async () => (await import("lottie-react")).default,
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="w-full h-64 bg-gray-200 animate-pulse rounded-lg"
+        style={{
+          transform: 'translateZ(0)',
+          backfaceVisibility: 'hidden',
+          WebkitBackfaceVisibility: 'hidden'
+        }}
+      />
+    )
+  }
+);
+
 
 export default function Home() {
   const [isVisible, setIsVisible] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    // Trigger animation after mount
-    setIsVisible(true);
+    setIsMounted(true);
+    // Delay animation trigger for better Safari performance
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
+
+  // Safari-optimized Lottie options
   const defaultOptions = {
     animationData: gradientAnimation,
     loop: true,
+    autoplay: true,
+    renderer: "svg" as const, // SVG renderer works better in Safari
+    rendererSettings: {
+      preserveAspectRatio: "xMidYMid slice",
+      progressiveLoad: true, // Better for Safari
+      hideOnTransparent: true,
+    }
+  };
+
+
+  // Safari-optimized inline styles
+  const safariOptimizedContainer = {
+    transform: 'translateZ(0)',
+    backfaceVisibility: 'hidden' as const,
+    WebkitBackfaceVisibility: 'hidden' as const,
+    willChange: isVisible ? 'transform, opacity' : 'auto',
+  };
+
+  const lottieTransitionStyle = {
+    ...safariOptimizedContainer,
+    transition: 'transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+    opacity: isVisible ? 1 : 0,
+    transform: isVisible
+      ? 'translateX(0) translateZ(0)'
+      : 'translateX(20px) translateZ(0)',
   };
   const testimonials = [
     {
@@ -60,6 +108,36 @@ export default function Home() {
   }
   return (
     <>
+      <style jsx global>{`
+        /* Safari-specific smooth scrolling */
+        html {
+          -webkit-overflow-scrolling: touch;
+          scroll-behavior: smooth;
+        }
+        
+        /* Optimize backdrop blur for Safari */
+        .backdrop-blur-md {
+          -webkit-backdrop-filter: blur(12px);
+          backdrop-filter: blur(12px);
+        }
+        
+        /* Force hardware acceleration on key elements */
+        .safari-optimized {
+          transform: translateZ(0);
+          -webkit-transform: translateZ(0);
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+          perspective: 1000px;
+          -webkit-perspective: 1000px;
+        }
+        
+        /* Optimize text rendering for Safari */
+        .text-optimize {
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          text-rendering: optimizeLegibility;
+        }
+      `}</style>
       <NavbarDemo />
       <ClickSpark
         sparkColor="#036ffc"
@@ -73,18 +151,25 @@ export default function Home() {
             <Intro />
           </div>
           <div className="w-full lg:w-1/2 flex justify-center items-center">
-            <div
-              className={`w-md hidden lg:block transition-transform transition-opacity duration-700 ease-out ${
-                isVisible
-                  ? "opacity-100 translate-x-0"
-                  : "opacity-0 translate-x-20"
-              }`}
-            >
-              <LottieView
-                animationData={defaultOptions.animationData}
-                loop={defaultOptions.loop}
-              />
-            </div>
+            {isMounted && (
+              <div
+                className="w-md hidden lg:block"
+                style={lottieTransitionStyle}
+              >
+                <LottieView
+                  animationData={defaultOptions.animationData}
+                  loop={defaultOptions.loop}
+                  autoplay={defaultOptions.autoplay}
+                  renderer={defaultOptions.renderer}
+                  rendererSettings={defaultOptions.rendererSettings}
+                  style={{
+                    transform: 'translateZ(0)',
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
         <div className="">
