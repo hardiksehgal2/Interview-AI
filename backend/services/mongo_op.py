@@ -1,3 +1,4 @@
+# backend\services\mongo_op.py
 import datetime
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from typing import Optional, Dict, Any, List
@@ -15,7 +16,15 @@ db = None
 JD_COLLECTION = "job_description"
 RESUME_COLLECTION = "uploaded_resume"
 INTERVIEW_DATA_COLLECTION = "interview_data"
+COMPANY_COLLECTION = "companies" 
 
+async def create_company_index():
+    """Create unique index on email field for companies"""
+    try:
+        await db[COMPANY_COLLECTION].create_index("email", unique=True)
+        print("Company email index created successfully")
+    except Exception as e:
+        print(f"Error creating company index: {str(e)}")
 
 async def connect_to_mongo():
     global client, db
@@ -25,16 +34,20 @@ async def connect_to_mongo():
         
         await client.admin.command('ping')
         db = client[DATABASE_NAME]
+        
+        # Create company index
+        await create_company_index()
+        
         print("Successfully connected to MongoDB")
     except Exception as e:
         print(f"Error connecting to MongoDB: {str(e)}")
         raise e
 
-
 async def close_mongo_connection():
     global client
     if client:
         client.close()
+
 
 
 async def save_jd(domain: str, jd_text: str) -> Dict[str, Any]:
