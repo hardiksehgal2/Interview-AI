@@ -1,3 +1,4 @@
+# backend\app.py
 import asyncio
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ import json
 import base64
 import cv2
 import numpy as np
+from auth.routes.auth_routes import router as company_router  # Adjust the path if needed
 
 
 @asynccontextmanager
@@ -34,6 +36,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(company_router, prefix="/company", tags=["Company"])
 
 
 @app.get("/health")

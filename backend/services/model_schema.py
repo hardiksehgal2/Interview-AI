@@ -1,3 +1,4 @@
+# backend\services\model_schema.py
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 
