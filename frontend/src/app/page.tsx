@@ -6,7 +6,6 @@ import gradientAnimation from "@/../public/animations/gradient.json";
 import dynamic from "next/dynamic";
 import ResearchFlow from "@/components/landing/ResearchFlow";
 import ClickSpark from "@/components/ClickSpark";
-import SocialProofSection from "@/components/landing/SocialProof";
 import { InfiniteMovingCards } from "@/components/ui/infinite-moving-cards";
 import SplitText from "@/components/SplitText/SplitText";
 import { GlowingEffectDemo } from "@/components/GlowingEffect";
