@@ -70,6 +70,7 @@ class CompanyInDB(BaseModel):
             ObjectId: str,
             datetime.datetime: lambda v: v.isoformat()
         }
+
 class CompanyResponse(BaseModel):
     id: str = Field(..., alias="_id")
     name: str
@@ -88,6 +89,7 @@ class CompanyResponse(BaseModel):
         json_encoders = {
             datetime.datetime: lambda v: v.isoformat()
         }
+
 class CompanyLogin(BaseModel):
     email: EmailStr
     password: str

@@ -5,6 +5,7 @@ uvicorn==0.34.2
 uvicorn[standard]==0.34.2
 motor==3.7.1
 pydantic==2.11.4
+pydantic[email]==2.11.4
 python-multipart==0.0.20
 gtts==2.5.4
 pyttsx3==2.98
