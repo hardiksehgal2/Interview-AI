@@ -9,15 +9,15 @@ from contextlib import asynccontextmanager
 from services.utils import extract_text_from_pdf_stream, pdf_to_base64
 from services.llm import call_llm_for_interview_prep, get_follow_up_question, process_interview_completion
 from services.tts_services import text_to_speech_sarvam_base64_array
-from services.model_schema import InterviewDataStorage, JDCreate, InterviewSummaryResponse
-from services.mongo_op import connect_to_mongo, close_mongo_connection, save_resume, save_interview_data, get_resume_by_jd, get_jd_by_id, get_interview_data_by_id, get_jd_by_domain, save_jd, update_interview_data
+from db.models.interview import InterviewDataStorage, JDCreate, InterviewSummaryResponse
+from db.mongo_db import connect_to_mongo, close_mongo_connection, save_resume, save_interview_data, get_resume_by_jd, get_jd_by_id, get_interview_data_by_id, get_jd_by_domain, save_jd, update_interview_data
 from services.asr_services import transcribe_audio
 from services.camera import OpenCVAntiCheat
 import json
 import base64
 import cv2
 import numpy as np
-from auth.routes.auth_routes import router as company_router  # Adjust the path if needed
+from modules.company import router as company_router  # Adjust the path if needed
 
 
 @asynccontextmanager
@@ -36,7 +36,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(company_router, prefix="/company", tags=["Company"])
+app.include_router(company_router)
 
 
 @app.get("/health")
