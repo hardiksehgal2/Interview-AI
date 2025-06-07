@@ -21,13 +21,13 @@ const Intro = () => {
     },
   ];
   const handleSubmit = () => {
-    router.push("/careers")
+    router.push("/login")
   }
 
   return (
     <div
       className={`max-w-4xl mx-auto py-16 flex flex-col items-start text-center md:text-left
-        transition-transform transition-opacity duration-700 ease-out
+        transition-opacity duration-700 ease-out
         ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-20'}`}
     >
       {/* Process Steps */}
