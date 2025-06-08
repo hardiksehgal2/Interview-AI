@@ -2,11 +2,13 @@
 
 import { withAuth } from '@/wrapper/authWrapper'
 import React from 'react'
+import { JobTable } from './components/table/JobTable'
 
 const dashboard = () => {
   return (
-    <div>
+    <div className='bg-white min-h-screen'>
       Welcome to dashboard
+      <JobTable/>
     </div>
   )
 }
