@@ -146,8 +146,13 @@ class CompanyUser(CompanyUserBase, BaseDBModel):
     created_by: Optional[int] = None
 
 # ===== JOB DESCRIPTION MODELS =====
+class DifficultyLevel(str, Enum):
+    EASY = "easy"
+    MEDIUM = "medium"
+    HARD = "hard"
+
+# Updated JobDescriptionBase model
 class JobDescriptionBase(BaseModel):
-    company_id: int
     role_title: str = Field(..., min_length=1, max_length=255)
     description: str
     skills: Optional[Dict[str, Any]] = None
@@ -159,6 +164,13 @@ class JobDescriptionBase(BaseModel):
     employment_type: Optional[EmploymentType] = None
     experience_level: Optional[ExperienceLevel] = None
     is_active: bool = True
+    
+    # New fields from frontend
+    difficulty: Optional[DifficultyLevel] = Field(DifficultyLevel.MEDIUM, description="AI assessment difficulty level")
+    openings: Optional[int] = Field(1, ge=1, description="Number of job openings")
+    duration: Optional[str] = Field(None, description="Job duration (for non-full-time positions)")
+    perks: Optional[str] = Field(None, description="Job perks and benefits")
+    responsibilities: Optional[str] = Field(None, description="Key job responsibilities")
 
     @validator('salary_max')
     def validate_salary_range(cls, v, values):
@@ -166,9 +178,20 @@ class JobDescriptionBase(BaseModel):
             if v < values['salary_min']:
                 raise ValueError('salary_max must be greater than or equal to salary_min')
         return v
+    
+    @validator('duration')
+    def validate_duration_for_non_fulltime(cls, v, values):
+        """Validate that duration is provided for non-full-time positions"""
+        employment_type = values.get('employment_type')
+        if employment_type and employment_type != EmploymentType.FULL_TIME:
+            if not v or v.strip() == "":
+                raise ValueError('Duration is required for non-full-time positions')
+        return v
+
 
 class JobDescriptionCreate(JobDescriptionBase):
-    created_by: int
+    # created_by: int
+    pass
 
 class JobDescriptionUpdate(BaseModel):
     role_title: Optional[str] = Field(None, min_length=1, max_length=255)

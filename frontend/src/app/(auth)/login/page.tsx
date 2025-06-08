@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState } from 'react';
+import React, { useState , useEffect} from 'react';
 import { Eye, EyeOff, Building2, Mail, Shield, LogIn } from 'lucide-react';
 import AxiosInstances from '@/services/AxiosInstance';
 import toast, { Toaster } from 'react-hot-toast';
+import { TokenManager } from '@/utils/tokenManager';
+import { useRouter } from 'next/navigation';
 
 interface LoginData {
     email: string;
@@ -26,7 +28,14 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [errors, setErrors] = useState<LoginErrors>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const router = useRouter();
 
+    // Check if already logged in when component mounts
+    useEffect(() => {
+      if (TokenManager.isAuthenticated()) {
+        router.replace('/dashboard');
+      }
+    }, [router]);
     const validateForm = () => {
         const newErrors: LoginErrors = {};
 
@@ -76,13 +85,13 @@ const Login = () => {
             console.log('Submitting login:', { email: submitData.email, password: '[HIDDEN]' });
 
             // Make API call - replace with your actual AxiosInstance
-            const response = await AxiosInstances.post("/api/company/login", submitData, {
+            const response = await AxiosInstances.post("/auth/login", submitData, {
                 headers: {
                     'Content-Type': 'application/json',
                 },
             });
 
-            console.log('Registration successful:', response.data);
+            TokenManager.setAuthData(response.data);
 
             toast.success('Company Loggedin successfully!');
 
@@ -94,7 +103,7 @@ const Login = () => {
 
 
             // Redirect to dashboard or home page
-            // window.location.href = '/dashboard';
+            router.push("/dashboard")
 
         } catch (error: any) {
             console.error('Login failed:', error);
@@ -268,4 +277,4 @@ const Login = () => {
     );
 };
 
-export default Login;
+export default (Login);

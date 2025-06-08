@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import { TokenManager } from '@/utils/tokenManager';
 
 class AxiosService {
   private axiosInstance: AxiosInstance;
@@ -7,15 +8,37 @@ class AxiosService {
   constructor(baseURL: string) {
     this.axiosInstance = axios.create({
       baseURL,
-      // Remove the default Content-Type header - let it be set automatically
-      // based on the request type
     });
 
-    // Optional: Add interceptors
+    // REQUEST INTERCEPTOR: Automatically add auth headers to every request
+    this.axiosInstance.interceptors.request.use(
+      (config) => {
+        // Get the Bearer token from cookies and add to headers
+        const authHeaders = TokenManager.getAuthHeader();
+
+        // Properly merge headers using Object.assign or individual assignment
+        Object.assign(config.headers, authHeaders);
+
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+
+    // RESPONSE INTERCEPTOR: Handle token expiration and errors
     this.axiosInstance.interceptors.response.use(
       (response: AxiosResponse) => response,
       (error) => {
         console.error('API error:', error);
+
+        // If token is expired/invalid (401), clear auth data and redirect to login
+        if (error.response?.status === 401) {
+          TokenManager.clearAuthData();
+          // Only redirect if we're in the browser
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+          }
+        }
+
         return Promise.reject(error);
       }
     );
