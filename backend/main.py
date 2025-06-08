@@ -10,8 +10,10 @@ import bcrypt
 import jwt
 import os
 from beanie import Indexed
-from lmao import *  # Import all the Pydantic models from previous artifact
+from db.models.all_models import *  # Import all the Pydantic models from previous artifact
 from fastapi.middleware.cors import CORSMiddleware
+from config import load_env
+env = load_env.Environment()
 app = FastAPI(title="AI Interview Assistant API", root_path="/api")
 
 app.add_middleware(
@@ -225,8 +227,8 @@ class InterviewAnalyticsDoc(Document, InterviewAnalyticsBase):
 security = HTTPBearer()
 
 # ===== DATABASE CONNECTION =====
-MONGODB_URL = "mongodb+srv://jobshardik00:Vu8cuA7aKJw06oOC@cluster0.4hbnjek.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-DATABASE_NAME = "ai_interview"
+MONGODB_URL = env.MONGO_URI
+DATABASE_NAME = env.DATABASE_NAME
 
 @app.on_event("startup")
 async def startup_event():
