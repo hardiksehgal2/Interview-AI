@@ -1,8 +1,9 @@
+/* eslint-disable react/no-unescaped-entities */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
-
-import { useState } from "react";
+import skillsData from "@/data/tech_skills.json"
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +12,12 @@ import { withAuth } from "@/wrapper/authWrapper";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { motion, AnimatePresence } from "motion/react";
+import citiesData from "@/data/cities.json"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   IconBriefcase,
   IconMapPin,
@@ -28,6 +35,9 @@ import { useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 import { TokenManager } from "@/utils/tokenManager"; // Import TokenManager
 import AxiosInstances from "@/services/AxiosInstance";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { ChevronDown, Plus, Search } from "lucide-react";
+
 
 type EmploymentType = "full_time" | "part_time" | "contract" | "internship";
 type ExperienceLevel = "entry" | "mid" | "senior" | "lead" | "executive";
@@ -55,6 +65,11 @@ interface JobPostingFormData {
 
 interface ValidationErrors {
   [key: string]: string;
+}
+interface City {
+  id: string
+  name: string
+  state: string
 }
 
 const steps = [
@@ -102,6 +117,60 @@ function JobPostingForm() {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentSkill, setCurrentSkill] = useState("");
+  const [selectedCity, setSelectedCity] = useState<City | null>(null)
+  const [isCityOpen, setIsCityOpen] = useState(false)
+  const handleCitySelect = (city: City) => {
+    setSelectedCity(city)
+    setIsCityOpen(false)
+    // Update the form data with the combined city and state
+    handleChange({
+      target: {
+        name: 'location',
+        value: `${city.name}, ${city.state}`
+      }
+    } as React.ChangeEvent<HTMLInputElement>)
+  }
+  const [isSkillsOpen, setIsSkillsOpen] = useState(false)
+  const [skillSearch, setSkillSearch] = useState("")
+  const [filteredSkills, setFilteredSkills] = useState<string[]>([])
+
+  useEffect(() => {
+    if (skillSearch.trim() === "") {
+      setFilteredSkills([])
+      return
+    }
+
+    const allSkills: string[] = []
+    Object.values(skillsData).forEach(categorySkills => {
+      allSkills.push(...categorySkills)
+    })
+
+    const filtered = allSkills.filter(skill =>
+      skill.toLowerCase().includes(skillSearch.toLowerCase()) &&
+      !Object.values(formData.skills).includes(skill)
+    )
+
+    setFilteredSkills(filtered)
+  }, [skillSearch, formData.skills])
+
+  const handleSkillSelect = (skill: string) => {
+    const skillKey = `skill_${Object.keys(formData.skills).length + 1}`
+    setFormData(prev => ({
+      ...prev,
+      skills: {
+        ...prev.skills,
+        [skillKey]: skill
+      }
+    }))
+    setIsSkillsOpen(false)
+    setSkillSearch("")
+    setCurrentSkill("")
+  }
+  const handleAddCustomSkill = () => {
+    if (skillSearch.trim() && !Object.values(formData.skills).includes(skillSearch.trim())) {
+      handleSkillSelect(skillSearch.trim())
+    }
+  }
 
   const containerVariants = {
     hidden: { opacity: 0, x: 300 },
@@ -322,9 +391,9 @@ function JobPostingForm() {
       className="space-y-6"
     >
       {/* Basic Information */}
-      <Card className="shadow-lg border-0">
-        <CardHeader className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-t-lg">
-          <CardTitle className="flex items-center gap-2">
+      <Card className=" border-0">
+        <CardHeader className="bg-white text-black">
+          <CardTitle className="flex items-center text-lg gap-2">
             <IconBriefcase className="h-5 w-5" />
             Basic Information
           </CardTitle>
@@ -375,9 +444,9 @@ function JobPostingForm() {
       </Card>
 
       {/* Location & Compensation with validation */}
-      <Card className="shadow-lg border-0">
-        <CardHeader className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-          <CardTitle className="flex items-center gap-2">
+      <Card className=" border-0">
+        <CardHeader className="bg-white text-black">
+          <CardTitle className="flex items-center text-lg gap-2">
             <IconMapPin className="h-5 w-5" />
             Location & Compensation
           </CardTitle>
@@ -386,14 +455,47 @@ function JobPostingForm() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Location *</label>
-              <Input
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                placeholder="e.g. San Francisco, CA or Remote"
-                className={`w-full ${errors.location ? 'border-red-500 focus:border-red-500' : ''}`}
-                required
-              />
+              <Popover open={isCityOpen} onOpenChange={setIsCityOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={`w-full flex items-center justify-between px-3 py-2 text-left border rounded-md bg-white hover:bg-gray-50 ${errors.location ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                  >
+                    <span className={selectedCity ? 'text-gray-900' : 'text-gray-500'}>
+                      {selectedCity ? `${selectedCity.name}, ${selectedCity.state}` : 'Select a city...'}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <div className="flex items-center border-b px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      <CommandInput
+                        placeholder="Search cities..."
+                        className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    </div>
+                    <CommandEmpty>No city found.</CommandEmpty>
+                    <CommandGroup className="max-h-64 overflow-auto">
+                      {citiesData.map((city: City) => (
+                        <CommandItem
+                          key={city.id}
+                          value={city.name}
+                          onSelect={() => handleCitySelect(city)}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-medium">{city.name}</span>
+                            <span className="text-sm text-gray-500">{city.state}</span>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               {errors.location && <p className="text-red-500 text-xs">{errors.location}</p>}
             </div>
 
@@ -434,22 +536,91 @@ function JobPostingForm() {
       </Card>
 
       {/* Skills & Requirements with validation */}
-      <Card className="shadow-lg border-0">
-        <CardHeader className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-          <CardTitle className="flex items-center gap-2">
-            <IconUsers className="h-5 w-5" />
+      <Card className="border-0">
+        <CardHeader className="bg-white text-black">
+          <CardTitle className="flex items-center text-lg gap-2">
+            <IconUsers className="h-5 w-5 " />
             Skills & Requirements
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Required Skills *</label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 ">
+              <Popover open={isSkillsOpen} onOpenChange={setIsSkillsOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex-1  flex items-center justify-between px-3 py-2 text-left border rounded-md bg-white hover:bg-gray-50 border-gray-300"
+                  >
+                    <span className="text-gray-500">Search and select skills...</span>
+                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className=" w-full lg:w-68 p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <div className="flex items-center border-b px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      <input
+                        placeholder="Search skills or type custom skill..."
+                        value={skillSearch}
+                        onChange={(e) => setSkillSearch(e.target.value)}
+                        className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    </div>
+                    <CommandList>
+                      {skillSearch.trim() && !filteredSkills.includes(skillSearch.trim()) && !Object.values(formData.skills).includes(skillSearch.trim()) && (
+                        <CommandGroup>
+                          <CommandItem
+                            onSelect={handleAddCustomSkill}
+                            className="cursor-pointer bg-blue-50 border-b"
+                          >
+                            <Plus className="mr-2 h-4 w-4 text-blue-600" />
+                            <span className="text-blue-600 font-medium">Add "{skillSearch.trim()}" as custom skill</span>
+                          </CommandItem>
+                        </CommandGroup>
+                      )}
+
+                      {filteredSkills.length > 0 ? (
+                        Object.entries(skillsData).map(([category, skills]) => {
+                          const categorySkills = skills.filter(skill =>
+                            skill.toLowerCase().includes(skillSearch.toLowerCase()) &&
+                            !Object.values(formData.skills).includes(skill)
+                          )
+
+                          if (categorySkills.length === 0) return null
+
+                          return (
+                            <CommandGroup key={category} heading={category}>
+                              {categorySkills.map((skill) => (
+                                <CommandItem
+                                  key={skill}
+                                  onSelect={() => handleSkillSelect(skill)}
+                                  className="cursor-pointer"
+                                >
+                                  {skill}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )
+                        })
+                      ) : skillSearch.trim() ? (
+                        <CommandEmpty>No skills found.</CommandEmpty>
+                      ) : (
+                        <div className="p-4 text-sm text-gray-500 text-center">
+                          Start typing to search for skills...
+                        </div>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
               <Input
                 value={currentSkill}
                 onChange={(e) => setCurrentSkill(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Add a skill and press Enter"
+                placeholder="Or type here and press Enter"
                 className="flex-1"
               />
               <Button
@@ -532,9 +703,9 @@ function JobPostingForm() {
       exit="exit"
       className="space-y-6"
     >
-      <Card className="shadow-lg border-0">
-        <CardHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-          <CardTitle className="flex items-center gap-2">
+      <Card className=" border-0">
+        <CardHeader className="bg-white text-black">
+          <CardTitle className="flex items-center text-lg gap-2">
             <IconRobot className="h-5 w-5" />
             AI Configuration
           </CardTitle>
@@ -601,7 +772,7 @@ function JobPostingForm() {
     >
       <Card className="shadow-lg border-0">
         <CardHeader className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center text-lg gap-2">
             <IconCheck className="h-5 w-5" />
             Review & Publish
           </CardTitle>
@@ -705,7 +876,7 @@ function JobPostingForm() {
               <Button
                 onClick={prevStep}
                 variant="outline"
-                className="flex w-1/2 items-center gap-2 px-6 py-3"
+                className="flex  items-center gap-2 px-6 py-3"
               >
                 <IconChevronLeft className="h-4 w-4" />
                 Previous
@@ -714,7 +885,7 @@ function JobPostingForm() {
               <Button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="flex-1 w-1/2 py-4 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300"
+                className=" py-4 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 {isSubmitting ? (
                   <motion.div
