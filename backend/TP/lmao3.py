@@ -1,3 +1,4 @@
+# backend/TP/lmao3.py
 from fastapi import FastAPI, HTTPException, Depends, status, Query, Path
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -15,7 +16,8 @@ app = FastAPI(title="AI Interview Assistant API", root_path="/api")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True, 
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -62,7 +64,10 @@ class JobDescriptionDoc(Document, JobDescriptionBase):
             [("is_active", 1)],
             [("experience_level", 1)],
             [("employment_type", 1)],
+            [("difficulty", 1)],  # Add index for new difficulty field
+            [("created_at", -1)],  # Add index for sorting by creation date
         ]
+
 
 class CandidateDoc(Document, CandidateBase):
     id: Optional[PydanticObjectId] = None
@@ -217,8 +222,6 @@ class InterviewAnalyticsDoc(Document, InterviewAnalyticsBase):
     class Settings:
         name = "interview_analytics"
 
-# ===== FASTAPI SETUP =====
-app = FastAPI(title="Interview System API", version="1.0.0")
 security = HTTPBearer()
 
 # ===== DATABASE CONNECTION =====
@@ -250,13 +253,13 @@ def create_access_token(data: dict):
     expire = datetime.utcnow() + timedelta(hours=24)
     to_encode = data.copy()
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, "SECRET_KEY", algorithm="HS256")
+    return jwt.encode(to_encode, "3GJpGVgA+PNPlP+yLU8tA7sN3k0GPDx6QA98vkdjSts=", algorithm="HS256")
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Decode JWT token and return current user info"""
     try:
         token = credentials.credentials
-        payload = jwt.decode(token, "SECRET_KEY", algorithms=["HS256"])
+        payload = jwt.decode(token, "3GJpGVgA+PNPlP+yLU8tA7sN3k0GPDx6QA98vkdjSts=", algorithms=["HS256"])
         return payload
     except jwt.PyJWTError:
         raise HTTPException(
@@ -1134,44 +1137,34 @@ async def update_skill(
         raise HTTPException(status_code=404, detail="Skill not found")
 
 # ===== SYSTEM SETTINGS ENDPOINTS =====
-@app.post("/companies/{company_id}/settings/", response_model=SystemSettingDoc)
-async def create_system_setting(
+@app.post("/companies/{company_id}/jobs/", response_model=JobDescriptionDoc)
+async def create_job_description(
     company_id: str,
-    setting: SystemSettingCreate,
+    job: JobDescriptionCreate,
     current_user: dict = Depends(get_current_user)
 ):
-    """Create or update a system setting for a company"""
+    """Create a new job description"""
     # Check authorization
     if not ((current_user["user_type"] == "company" and current_user["user_id"] == company_id) or
             (current_user["user_type"] == "company_user" and current_user.get("company_id") == company_id)):
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    # Check if setting already exists
-    existing_setting = await SystemSettingDoc.find_one(
-        SystemSettingDoc.company_id == PydanticObjectId(company_id),
-        SystemSettingDoc.setting_key == setting.setting_key
-    )
-    
-    if existing_setting:
-        # Update existing setting
-        await existing_setting.update({
-            "$set": {
-                "setting_value": setting.setting_value,
-                "data_type": setting.data_type,
-                "updated_by": PydanticObjectId(current_user["user_id"]),
-                "updated_at": datetime.utcnow()
-            }
-        })
-        return await SystemSettingDoc.get(existing_setting.id)
-    else:
-        # Create new setting
-        setting_doc = SystemSettingDoc(
-            **setting.dict(),
-            company_id=PydanticObjectId(company_id),
-            updated_by=PydanticObjectId(current_user["user_id"])
+    # Additional validation for duration field
+    if job.employment_type and job.employment_type != EmploymentType.FULL_TIME and not job.duration:
+        raise HTTPException(
+            status_code=400, 
+            detail="Duration is required for non-full-time positions"
         )
-        await setting_doc.insert()
-        return setting_doc
+    
+    # Create job document with proper ObjectId conversion
+    job_data = job.dict()
+    job_doc = JobDescriptionDoc(
+        **job_data,
+        company_id=PydanticObjectId(company_id),
+        created_by=PydanticObjectId(current_user["user_id"])
+    )
+    await job_doc.insert()
+    return job_doc
 
 @app.get("/companies/{company_id}/settings/", response_model=List[SystemSettingDoc])
 async def list_company_settings(
