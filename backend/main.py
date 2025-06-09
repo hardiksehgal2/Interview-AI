@@ -13,6 +13,7 @@ from beanie import Indexed
 from db.models.all_models import *  # Import all the Pydantic models from previous artifact
 from fastapi.middleware.cors import CORSMiddleware
 from config import load_env
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 env = load_env.Environment()
 app = FastAPI(title="AI Interview Assistant API", root_path="/api")
 
@@ -224,7 +225,8 @@ class InterviewAnalyticsDoc(Document, InterviewAnalyticsBase):
     class Settings:
         name = "interview_analytics"
 
-security = HTTPBearer()
+# security = HTTPBearer()
+token = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 # ===== DATABASE CONNECTION =====
 MONGODB_URL = env.MONGO_URI
@@ -257,25 +259,37 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, "3GJpGVgA+PNPlP+yLU8tA7sN3k0GPDx6QA98vkdjSts=", algorithm="HS256")
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+# async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+#     """Decode JWT token and return current user info"""
+#     try:
+#         token = credentials.credentials
+#         payload = jwt.decode(token, "3GJpGVgA+PNPlP+yLU8tA7sN3k0GPDx6QA98vkdjSts=", algorithms=["HS256"])
+#         return payload
+#     except jwt.PyJWTError:
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Invalid authentication token"
+#         )
+
+async def get_current_user(token: str = Depends(token)):
     """Decode JWT token and return current user info"""
     try:
-        token = credentials.credentials
         payload = jwt.decode(token, "3GJpGVgA+PNPlP+yLU8tA7sN3k0GPDx6QA98vkdjSts=", algorithms=["HS256"])
         return payload
     except jwt.PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token"
+            detail="Invalid authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 # ===== AUTHENTICATION ENDPOINTS =====
 @app.post("/auth/login", response_model=LoginResponse)
-async def login(login_data: LoginRequest):
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """Login for companies and company users"""
     # Try company login first
-    company = await CompanyDoc.find_one(CompanyDoc.email == login_data.email)
-    if company and verify_password(login_data.password, company.password_hash):
+    company = await CompanyDoc.find_one(CompanyDoc.email == form_data.username)
+    if company and verify_password(form_data.password, company.password_hash):
         token_data = {
             "user_id": str(company.id),
             "email": company.email,
@@ -290,8 +304,8 @@ async def login(login_data: LoginRequest):
         )
     
     # Try company user login
-    user = await CompanyUserDoc.find_one(CompanyUserDoc.email == login_data.email)
-    if user and verify_password(login_data.password, user.password_hash):
+    user = await CompanyUserDoc.find_one(CompanyUserDoc.email == form_data.username)
+    if user and verify_password(form_data.password, user.password_hash):
         token_data = {
             "user_id": str(user.id),
             "email": user.email,
@@ -306,7 +320,11 @@ async def login(login_data: LoginRequest):
             user_data={"id": str(user.id), "name": user.name, "email": user.email, "role": user.role}
         )
     
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Incorrect username or password",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 # ===== COMPANY ENDPOINTS =====
 @app.post("/companies/", response_model=CompanyDoc)
@@ -350,7 +368,6 @@ async def update_company(
         company = await CompanyDoc.get(PydanticObjectId(company_id))
         if not company:
             raise HTTPException(status_code=404, detail="Company not found")
-        
         # Check authorization
         if current_user["user_type"] != "company" or current_user["user_id"] != company_id:
             raise HTTPException(status_code=403, detail="Not authorized")
@@ -362,7 +379,7 @@ async def update_company(
         
         return await CompanyDoc.get(company.id)
     except Exception:
-        raise HTTPException(status_code=404, detail="Company not found")
+        raise HTTPException(status_code=403, detail="Company not found")
 
 @app.get("/companies/", response_model=List[CompanyDoc])
 async def list_companies(
@@ -501,7 +518,7 @@ async def list_company_jobs(
     query = JobDescriptionDoc.company_id == PydanticObjectId(company_id)
     
     if is_active is not None:
-        query = query & (JobDescriptionDoc.is_active == is_active)
+        query = query and (JobDescriptionDoc.is_active == is_active)
     
     jobs = await JobDescriptionDoc.find(query).skip(skip).limit(limit).to_list()
     return jobs
