@@ -16,21 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 
 # Upgrade pip
-RUN pip install --upgrade pip 
-
-# Copy requirements file (if you have one) or install dependencies directly
-# If you use requirements.txt:
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --upgrade pip \
+ && pip install --no-cache-dir -r requirements.txt
 
-# If you don't have requirements.txt, uncomment and use this:
-# RUN pip install fastapi uvicorn
-
-# Copy the rest of the application
 COPY . .
 
+EXPOSE 8000
 # Command to run the application - using port 8000 as you specified
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # Expose the port the app runs on
-EXPOSE 8000
