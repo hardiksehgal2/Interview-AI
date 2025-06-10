@@ -45,6 +45,7 @@ import {
 import AxiosInstances from "@/services/AxiosInstance"
 import { TokenManager } from "@/utils/tokenManager"
 import ViewJob from "./ViewJob"
+import EditJob from "./EditJob"
 
 export interface Job {
     _id: string
@@ -90,7 +91,25 @@ export function JobTable() {
     const [deleteJobId, setDeleteJobId] = React.useState<string | null>(null)
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false)
     const [isDeleting, setIsDeleting] = React.useState(false)
+    const [editJobId, setEditJobId] = React.useState<string | null>(null)
+    const [isEditJobOpen, setIsEditJobOpen] = React.useState(false)
 
+    const handleEditJob = (jobId: string) => {
+        setEditJobId(jobId)
+        setTimeout(() => {
+            setIsEditJobOpen(true)
+        }, 0)
+    }
+
+    const handleEditJobClose = () => {
+        setIsEditJobOpen(false)
+        setEditJobId(null)
+    }
+
+    const handleJobUpdated = () => {
+        // Refetch the current page data after job is updated
+        fetchJobs(currentPage)
+    }
     // Add these functions before the columns definition
     const handleDeleteJob = (jobId: string) => {
         setDeleteJobId(jobId)
@@ -296,10 +315,11 @@ export function JobTable() {
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Applications
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer">
+                            <DropdownMenuItem className="cursor-pointer" onClick={() => handleEditJob(job._id)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit Job
                             </DropdownMenuItem>
+
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                                 className="cursor-pointer text-red-600"
@@ -475,6 +495,12 @@ export function JobTable() {
                 jobId={selectedJobId}
                 isOpen={isViewJobOpen}
                 onClose={handleViewJobClose}
+            />
+            <EditJob
+                jobId={editJobId}
+                isOpen={isEditJobOpen}
+                onClose={handleEditJobClose}
+                onJobUpdated={handleJobUpdated}
             />
         </div>
     )
