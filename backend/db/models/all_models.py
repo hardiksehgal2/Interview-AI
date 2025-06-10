@@ -111,7 +111,7 @@ class CompanyUpdate(BaseModel):
     phone: Optional[str] = None
     description: Optional[str] = None
     logo_url: Optional[str] = None
-    subscription_plan: Optional[SubscriptionPlan] = None
+    # subscription_plan: Optional[SubscriptionPlan] = None
 
 class Company(CompanyBase, BaseDBModel):
     id: str
@@ -205,6 +205,11 @@ class JobDescriptionUpdate(BaseModel):
     employment_type: Optional[EmploymentType] = None
     experience_level: Optional[ExperienceLevel] = None
     is_active: Optional[bool] = None
+    difficulty: Optional[str] = None
+    openings: Optional[int] = Field(None, ge=0)
+    duration: Optional[str] = None
+    perks: Optional[str] = None
+    responsibilities: Optional[str] = None
 
 class JobDescription(JobDescriptionBase, BaseDBModel):
     id: str

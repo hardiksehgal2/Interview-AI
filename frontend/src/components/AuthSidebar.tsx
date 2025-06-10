@@ -45,7 +45,7 @@ export const AuthSidebar = ({ children }: AuthSidebarProps) => {
         },
         {
             label: "Profile",
-            href: "#",
+            href: "company-profile",
             icon: <IconUser className="text-neutral-700 dark:text-neutral-200 h-5 w-5 shrink-0" />,
         },
     ];
