@@ -416,7 +416,7 @@ async def create_company_user(
     
     hashed_password = hash_password(user.password)
     user_doc = CompanyUserDoc(
-        **user.dict(exclude={"password"}),
+        **user.dict(exclude={"password", "company_id", "created_by"}),
         company_id=PydanticObjectId(company_id),
         password_hash=hashed_password,
         created_by=PydanticObjectId(current_user["user_id"]) if current_user["user_type"] == "company_user" else None
