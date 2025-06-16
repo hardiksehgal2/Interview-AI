@@ -88,7 +88,7 @@ class CompanyBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
     size: Optional[int] = Field(None, ge=1)
-    type: Optional[CompanyType] = None
+    type: Optional[str] = None
     industry: Optional[str] = None
     location: Optional[str] = None
     website: Optional[str] = None
@@ -104,7 +104,7 @@ class CompanyUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[EmailStr] = None
     size: Optional[int] = Field(None, ge=1)
-    type: Optional[CompanyType] = None
+    type: Optional[str] = None
     industry: Optional[str] = None
     location: Optional[str] = None
     website: Optional[str] = None

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from "react";
@@ -8,6 +9,7 @@ import { withAuth } from "@/wrapper/authWrapper";
 import { TokenManager } from "@/utils/tokenManager";
 import { toast } from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
     Card,
     CardHeader,
@@ -42,10 +44,11 @@ import {
     ArrowLeft,
     Save,
     ChevronDown,
-    Search
+    Camera,
 } from "lucide-react";
 import AxiosInstances from "@/services/AxiosInstance";
 import citiesData from "@/data/cities.json";
+import PhotoUpload from "./PhotoUpload";
 
 // Types
 interface City {
@@ -91,6 +94,7 @@ const companySchema = z.object({
     website: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
     phone: z.string().min(1, "Phone number cannot be empty"),
     description: z.string().min(1, "Company description cannot be empty"),
+    logo_url: z.string().optional(),
 });
 
 export type CompanyFormData = z.infer<typeof companySchema>;
@@ -135,6 +139,8 @@ const EditCompany: React.FC = () => {
     const [isLoaded, setIsLoaded] = useState(false);
     const [isCityOpen, setIsCityOpen] = useState(false);
     const [selectedCity, setSelectedCity] = useState<City | null>(null);
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 
     const {
         register,
@@ -155,6 +161,7 @@ const EditCompany: React.FC = () => {
             website: "",
             phone: "",
             description: "",
+            logo_url: "",
         },
     });
 
@@ -180,10 +187,10 @@ const EditCompany: React.FC = () => {
                 const { data } = await AxiosInstances.get<CompanyFormData>(
                     `/companies/${userData.id}`
                 );
-                
+
                 // Find the selected city from the current location
                 if (data.location) {
-                    const foundCity = citiesData.find(city => 
+                    const foundCity = citiesData.find(city =>
                         data.location.includes(city.name) && data.location.includes(city.state)
                     );
                     if (foundCity) {
@@ -195,6 +202,7 @@ const EditCompany: React.FC = () => {
                     ...data,
                     size: Number(data.size) || 1,
                     website: data.website || "",
+                    logo_url: data.logo_url || "",
                 });
                 // Trigger animations after data loads
                 setTimeout(() => setIsLoaded(true), 100);
@@ -208,7 +216,10 @@ const EditCompany: React.FC = () => {
 
         fetchCompany();
     }, [reset, router]);
-
+    const handlePhotoChange = (base64: string | null) => {
+        setLogoUrl(base64);
+        setValue('logo_url', base64 || '', { shouldValidate: true });
+    };
     // Submit handler
     const onSubmit = async (formData: CompanyFormData) => {
         const userData = TokenManager.getUserData();
@@ -223,8 +234,9 @@ const EditCompany: React.FC = () => {
             const cleanedData = {
                 ...formData,
                 website: formData.website || undefined,
+                logo_url: logoUrl || undefined,
             };
-            
+
             await AxiosInstances.put(`/companies/${userData.id}`, cleanedData);
             toast.success("Company profile updated successfully!");
             router.push("/company-profile");
@@ -266,11 +278,48 @@ const EditCompany: React.FC = () => {
 
                     <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-600 to-blue-700 text-white overflow-hidden">
                         <CardContent className="p-6 sm:p-8">
-                             <div className="flex items-center space-x-4 sm:space-x-6">
+                            <div className="flex items-center space-x-4 sm:space-x-6">
                                 <div className="relative group">
-                                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg">
-                                        <Building2 className="w-8 h-8 sm:w-10 sm:h-10 text-blue-600" />
+                                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg overflow-hidden">
+                                        {logoUrl ? (
+                                            <img
+                                                src={logoUrl}
+                                                alt="Company Logo"
+                                                className="w-full h-full object-cover rounded-2xl"
+                                            />
+                                        ) : (
+                                            <Building2 className="w-8 h-8 sm:w-10 sm:h-10 text-blue-600" />
+                                        )}
                                     </div>
+
+                                    <Dialog open={isPhotoModalOpen} onOpenChange={setIsPhotoModalOpen}>
+                                        <DialogTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="absolute -bottom-2 -right-2 w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-indigo-400"
+                                            >
+                                                <Camera className="w-4 h-4 text-white" />
+                                            </button>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-md">
+                                            <DialogHeader>
+                                                <DialogTitle>Upload Company Logo</DialogTitle>
+                                            </DialogHeader>
+                                            <div className="mt-4">
+                                                <PhotoUpload
+                                                    currentPhoto={logoUrl || ""}
+                                                    onPhotoChange={(base64) => {
+                                                        handlePhotoChange(base64);
+                                                        if (base64) {
+                                                            setIsPhotoModalOpen(false); // Close modal after successful upload
+                                                        }
+                                                    }}
+                                                    maxSizeInMB={5}
+                                                    allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
+                                                />
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
                                 </div>
 
                                 <div>
@@ -300,7 +349,7 @@ const EditCompany: React.FC = () => {
                     </CardHeader>
                     <CardContent className="p-6 sm:p-8">
                         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-                            
+
                             {/* Basic Information */}
                             <div className="space-y-6">
                                 <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-100 pb-2">
@@ -340,7 +389,7 @@ const EditCompany: React.FC = () => {
                                             {companyTypes.map(type => (<option key={type.value} value={type.value}>{type.label}</option>))}
                                         </select>
                                     </FormField>
-                                    
+
                                     {/* Location Dropdown */}
                                     <FormField label="Location" error={errors.location?.message} icon={MapPin} delay={600} isLoaded={isLoaded}>
                                         <Popover open={isCityOpen} onOpenChange={setIsCityOpen}>
@@ -359,7 +408,7 @@ const EditCompany: React.FC = () => {
                                             <PopoverContent className="w-full p-0" align="start">
                                                 <Command>
                                                     <div className="flex items-center border-b px-3">
-                                                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                        {/* <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" /> */}
                                                         <CommandInput
                                                             placeholder="Search cities..."
                                                             className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"

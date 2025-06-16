@@ -5,6 +5,7 @@ import { Eye, EyeOff, Building2, Mail, Users, FileText, Shield, CheckCircle } fr
 import AxiosInstances from '@/services/AxiosInstance';
 import { damp } from 'three/src/math/MathUtils.js';
 import toast, { Toaster } from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 
 interface FormData {
     name: string;
@@ -39,6 +40,7 @@ const Register = () => {
         password: '',
         confirmPassword: ''
     });
+    const router = useRouter();
 
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -151,7 +153,7 @@ const Register = () => {
             console.log('Submitting company registration:', submitData);
 
             //   Here you would make your actual API call
-            const response = await AxiosInstances.post("/api/company/register", submitData, {
+            const response = await AxiosInstances.post("/api/companies", submitData, {
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -161,7 +163,7 @@ const Register = () => {
             console.log('Registration successful:', response.data);
 
             toast('Company registered successfully!');
-
+            router.push("/login")
             // Reset form on success
             setFormData({
                 name: '',
