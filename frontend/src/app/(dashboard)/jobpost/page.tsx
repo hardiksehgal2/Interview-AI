@@ -471,7 +471,7 @@ function JobPostingForm() {
                 <PopoverContent className="w-full p-0" align="start">
                   <Command>
                     <div className="flex items-center border-b px-3">
-                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      {/* <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" /> */}
                       <CommandInput
                         placeholder="Search cities..."
                         className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
@@ -506,7 +506,7 @@ function JobPostingForm() {
                 <Input
                   name="salary_min"
                   type="number"
-                  min="0"
+                  // min="0"
                   value={formData.salary_min}
                   onChange={handleChange}
                   placeholder="50000"
@@ -522,7 +522,7 @@ function JobPostingForm() {
                 <Input
                   name="salary_max"
                   type="number"
-                  min="0"
+                  // min="0"
                   value={formData.salary_max}
                   onChange={handleChange}
                   placeholder="100000"
@@ -812,7 +812,7 @@ function JobPostingForm() {
                     <h4 className="font-semibold text-slate-800 mb-2">Compensation</h4>
                     <p className="text-sm text-slate-600">
                       {formData.salary_min > 0 || formData.salary_max > 0
-                        ? `$${formData.salary_min?.toLocaleString() || '0'} - $${formData.salary_max?.toLocaleString() || '0'}`
+                        ? `${formData.salary_min?.toLocaleString() || '0'} - ${formData.salary_max?.toLocaleString() || '0'}`
                         : "Salary not specified"}
                     </p>
                   </div>

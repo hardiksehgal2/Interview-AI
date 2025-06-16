@@ -68,51 +68,50 @@ const Login = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
+    
         if (!validateForm()) {
             return;
         }
-
+    
         setIsSubmitting(true);
         setErrors({}); // Clear any previous errors
-
+    
         try {
-            const submitData = {
-                email: formData.email.toLowerCase().trim(),
-                password: formData.password
-            };
-
-            console.log('Submitting login:', { email: submitData.email, password: '[HIDDEN]' });
-
-            // Make API call - replace with your actual AxiosInstance
-            const response = await AxiosInstances.post("/auth/login", submitData, {
+            // Create FormData for OAuth2PasswordRequestForm
+            const submitFormData = new FormData();
+            submitFormData.append('username', formData.email.toLowerCase().trim());
+            submitFormData.append('password', formData.password);
+    
+            console.log('Submitting login:', { email: formData.email.toLowerCase().trim(), password: '[HIDDEN]' });
+    
+            // Make API call with form data
+            const response = await AxiosInstances.post("/auth/login", submitFormData, {
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/x-www-form-urlencoded',
                 },
             });
-
+    
             TokenManager.setAuthData(response.data);
-
-            toast.success('Company Loggedin successfully!');
-
+    
+            toast.success('Company Logged in successfully!');
+    
             // Reset form on success
             setFormData({
                 email: '',
                 password: '',
             });
-
-
+    
             // Redirect to dashboard or home page
             router.push("/dashboard")
-
+    
         } catch (error: any) {
             console.error('Login failed:', error);
-
+    
             // Set general error message
             setErrors({
-                general: error.message.includes('401') || error.message.includes('Unauthorized')
+                general: error.response?.status === 401
                     ? 'Invalid email or password'
-                    : error.message || 'Login failed. Please try again.'
+                    : error.response?.data?.detail || error.message || 'Login failed. Please try again.'
             });
         } finally {
             setIsSubmitting(false);

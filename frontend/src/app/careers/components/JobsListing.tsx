@@ -11,9 +11,21 @@ import { JobCardSkeleton } from '@/components/Shimmer'
 
 // Define job interface with TypeScript types
 interface Job {
-    id: string;
-    jd_text: string;
-    domain: string;
+    _id: string;
+    role_title: string;
+    description: string;
+    skills: {
+        skill_1?: string;
+        skill_2?: string;
+        skill_3?: string;
+        skill_4?: string;
+        skill_5?: string;
+        skill_6?: string;
+        skill_7?: string;
+    };
+    employment_type: string;
+    experience_level: string;
+    location: string;
 }
 
 export default function JobsListing() {
@@ -35,13 +47,13 @@ export default function JobsListing() {
         const fetchJobs = async () => {
             try {
                 setLoading(true);
-                const response = await AxiosInstances.get('/jd/all/');
+                const response = await AxiosInstances.get('/jobs/?is_active=true');
 
                 if (response.data && response.data.length > 0) {
                     setJobs(response.data);
 
                     // Extract unique domains for filter buttons
-                    const uniqueDomains = [...new Set(response.data.map((job: Job) => job.domain))] as string[];
+                    const uniqueDomains = [...new Set(response.data.map((job: Job) => job.employment_type))] as string[];
                     setDomains(uniqueDomains);
                 }
             } catch (error) {
@@ -58,49 +70,42 @@ export default function JobsListing() {
     const formatDomainName = (domain: string): string => {
         if (!domain) return '';
 
-        return domain.split('-')
+        return domain.split('_')
             .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
     };
 
     // Extract title from markdown content
-    const extractTitle = (markdownText: string): string => {
-        if (!markdownText) return 'Job Opening';
+    // const extractTitle = (markdownText: string): string => {
+    //     if (!markdownText) return 'Job Opening';
 
-        // Look for first heading
-        const titleMatch = markdownText.match(/^##?\s+(.+)$/m);
-        return titleMatch ? titleMatch[1] : 'Job Opening';
-    };
-    
-    const handleApply = (domain: string, id: string) => {
-        router.push(`/careers/jobDetail?id=${id}&domain=${domain}`)
+    //     // Look for first heading
+    //     const titleMatch = markdownText.match(/^##?\s+(.+)$/m);
+    //     return titleMatch ? titleMatch[1] : 'Job Opening';
+    // };
+
+    const handleApply = (employmentType: string, id: string) => {
+        router.push(`/careers/jobDetail?id=${id}&type=${employmentType}`)
     }
-    
+
     // Extract first two lines of description (excluding the title)
-    const extractDescription = (markdownText: string): string => {
-        if (!markdownText) return '';
+    const extractDescription = (description: string): string => {
+        if (!description) return '';
 
-        // Split by lines and skip headers
-        const lines = markdownText.split('\n').filter(line => !line.startsWith('#') && line.trim());
-
-        // Get first two substantial lines
-        const firstLines = lines.slice(0, 2).join(' ');
-
-        return firstLines.length > 150
-            ? firstLines.substring(0, 150) + '...'
-            : firstLines;
+        return description.length > 150
+            ? description.substring(0, 150) + '...'
+            : description;
     };
 
     // Filter jobs based on selected domain
     const filteredJobs = activeFilter === 'View all'
         ? jobs
-        : jobs.filter(job => formatDomainName(job.domain) === activeFilter);
+        : jobs.filter(job => formatDomainName(job.employment_type) === activeFilter);
 
-    // Create filter options array with "View all" first, then sorted domains
-    const filterOptions: string[] = ['View all', ...domains.map(domain => formatDomainName(domain))];
-
+    // Create filter options array with "View all" first, then sorted employment types
+    const filterOptions: string[] = ['View all', ...domains.map(type => formatDomainName(type))];
     return (
-        <motion.div 
+        <motion.div
             ref={sectionRef}
             className="bg-white mx-auto px-4 md:px-16 py-8"
             initial={{ opacity: 0 }}
@@ -108,7 +113,7 @@ export default function JobsListing() {
             transition={{ duration: 0.6 }}
         >
             {/* Header */}
-            <motion.div 
+            <motion.div
                 className="flex justify-center mb-6"
                 initial={{ opacity: 0, y: 20 }}
                 animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
@@ -118,7 +123,7 @@ export default function JobsListing() {
             </motion.div>
 
             {/* Filter navigation */}
-            <motion.div 
+            <motion.div
                 className="flex flex-wrap gap-2 mb-8 overflow-x-auto"
                 initial={{ opacity: 0, y: 20 }}
                 animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
@@ -134,8 +139,8 @@ export default function JobsListing() {
                             }`}
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
-                        transition={{ 
-                            duration: 0.4, 
+                        transition={{
+                            duration: 0.4,
                             delay: 0.4 + (index * 0.05) // Subtle stagger
                         }}
                         whileHover={{ scale: 1.05 }}
@@ -148,49 +153,49 @@ export default function JobsListing() {
 
             {/* Loading state */}
             {loading && (
-                <motion.div 
+                <motion.div
                     className="text-center py-12"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                 >
-                    <JobCardSkeleton /> 
+                    <JobCardSkeleton />
                 </motion.div>
             )}
 
             {/* Job listings */}
-            <motion.div 
+            <motion.div
                 className="space-y-8"
                 initial={{ opacity: 0 }}
                 animate={isInView ? { opacity: 1 } : { opacity: 0 }}
                 transition={{ duration: 0.6, delay: 0.5 }}
             >
                 {filteredJobs.map((job, index) => (
-                    <motion.div 
-                        key={job.id} 
+                    <motion.div
+                        key={job._id}
                         className="border-b border-gray-200 pb-8"
                         initial={{ opacity: 0, y: 30 }}
                         animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-                        transition={{ 
-                            duration: 0.5, 
+                        transition={{
+                            duration: 0.5,
                             delay: 0.6 + (index * 0.1) // Stagger job cards
                         }}
-                        whileHover={{ 
+                        whileHover={{
                             scale: 1.01,
                             transition: { duration: 0.2 }
                         }}
                     >
                         <div className="flex justify-between items-start mb-2">
-                            <motion.h2 
+                            <motion.h2
                                 className="text-2xl font-bold text-gray-900"
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
                                 transition={{ duration: 0.4, delay: 0.7 + (index * 0.1) }}
                             >
-                                {extractTitle(job.jd_text)}
+                                {job.role_title}
                             </motion.h2>
                             <motion.button
-                                onClick={() => handleApply(job.domain, job.id)}
+                                onClick={() => handleApply(job.employment_type, job._id)}
                                 className="inline-flex cursor-pointer items-center text-lg font-medium text-gray-900 hover:text-blue-600 transition-colors duration-300 group"
                                 initial={{ opacity: 0, x: 20 }}
                                 animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: 20 }}
@@ -201,33 +206,33 @@ export default function JobsListing() {
                                 Apply <span className="ml-2 transform group-hover:translate-x-1 transition-transform duration-300">↗</span>
                             </motion.button>
                         </div>
-                        
-                        <motion.p 
+
+                        <motion.p
                             className="text-lg text-gray-700 mb-4"
                             initial={{ opacity: 0 }}
                             animate={isInView ? { opacity: 1 } : { opacity: 0 }}
                             transition={{ duration: 0.4, delay: 0.8 + (index * 0.1) }}
                         >
-                            {extractDescription(job.jd_text)}
+                            {extractDescription(job.description)}
                         </motion.p>
-                        
-                        <motion.div 
+
+                        <motion.div
                             className="flex flex-wrap gap-2"
                             initial={{ opacity: 0, y: 10 }}
                             animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
                             transition={{ duration: 0.4, delay: 0.9 + (index * 0.1) }}
                         >
-                            <motion.div 
+                            <motion.div
                                 className="inline-flex items-center px-3 py-1 rounded-full border border-gray-300 text-sm hover:bg-gray-50 transition-colors duration-300"
                                 whileHover={{ scale: 1.05, backgroundColor: "#f9fafb" }}
                             >
                                 <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12 12L12 14M12 6L12 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <path d="M12 2L2 7V17C2 17.55 2.45 18 3 18H9V12H15V18H21C21.55 18 22 17.55 22 17V7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
-                                100% remote
+                                {job.location}
                             </motion.div>
-                            
-                            <motion.div 
+
+                            <motion.div
                                 className="inline-flex items-center px-3 py-1 rounded-full border border-gray-300 text-sm hover:bg-gray-50 transition-colors duration-300"
                                 whileHover={{ scale: 1.05, backgroundColor: "#f9fafb" }}
                             >
@@ -235,23 +240,22 @@ export default function JobsListing() {
                                     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
                                     <path d="M12 7V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
-                                Full-time
+                                {formatDomainName(job.employment_type)}  {/* Changed from hardcoded "Full-time" */}
                             </motion.div>
 
-                            {/* Domain tag */}
-                            <motion.div 
+                            {/* Experience Level tag */}
+                            <motion.div
                                 className="inline-flex items-center px-3 py-1 rounded-full border border-gray-300 text-sm hover:bg-gray-50 transition-colors duration-300"
                                 whileHover={{ scale: 1.05, backgroundColor: "#f9fafb" }}
                             >
-                                {formatDomainName(job.domain)}
+                                {job.experience_level.charAt(0).toUpperCase() + job.experience_level.slice(1)} Level
                             </motion.div>
-
                             {/* View Details Link */}
                             <motion.button
                                 className="inline-flex cursor-pointer items-center px-3 py-1 rounded-full border border-blue-300 text-sm text-blue-600 hover:bg-blue-50 transition-colors duration-300"
-                                onClick={() => handleApply(job.domain, job.id)}
-                                whileHover={{ 
-                                    scale: 1.05, 
+                                onClick={() => handleApply(job.employment_type, job._id)}
+                                whileHover={{
+                                    scale: 1.05,
                                     backgroundColor: "#eff6ff",
                                     borderColor: "#2563eb"
                                 }}
@@ -264,7 +268,7 @@ export default function JobsListing() {
                 ))}
 
                 {filteredJobs.length === 0 && !loading && (
-                    <motion.div 
+                    <motion.div
                         className="text-center py-12"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}

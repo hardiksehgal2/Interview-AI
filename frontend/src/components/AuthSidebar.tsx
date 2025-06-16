@@ -17,6 +17,7 @@ import {
 } from "@tabler/icons-react";
 import { useAuth } from "@/hooks/useAuth";
 import Image from "next/image";
+
 interface AuthSidebarProps {
     children: React.ReactNode;
 }
@@ -26,7 +27,7 @@ export const AuthSidebar = ({ children }: AuthSidebarProps) => {
     const router = useRouter();
     const { userData, logout } = useAuth();
 
-    // Navigation items
+    // Navigation items - Fixed with absolute paths
     const navItems = [
         {
             label: "Dashboard",
@@ -45,10 +46,22 @@ export const AuthSidebar = ({ children }: AuthSidebarProps) => {
         },
         {
             label: "Profile",
-            href: "company-profile",
+            href: "/company-profile", // Ensure this starts with /
             icon: <IconUser className="text-neutral-700 dark:text-neutral-200 h-5 w-5 shrink-0" />,
         },
     ];
+
+    // Helper function to check if current path matches the nav item
+    const isActiveRoute = (href: string) => {
+        if (href === "#") return false;
+        
+        // For profile route, consider both /company-profile and /company-profile/* as active
+        if (href === "/company-profile") {
+            return pathname === "/company-profile" || pathname.startsWith("/company-profile/");
+        }
+        
+        return pathname === href;
+    };
 
     const handleNavClick = (href: string, label: string) => {
         if (href === "#") {
@@ -56,6 +69,8 @@ export const AuthSidebar = ({ children }: AuthSidebarProps) => {
             // You can show a toast or modal here
             return;
         }
+        
+        // Use router.push for absolute navigation
         router.push(href);
     };
 
@@ -71,7 +86,7 @@ export const AuthSidebar = ({ children }: AuthSidebarProps) => {
                 <SidebarBody className="justify-between gap-10">
                     <div className="flex flex-col overflow-y-auto overflow-x-hidden">
                         {/* Logo */}
-                        <div className=" mb-10 flex items-center">
+                        <div className="mb-10 flex items-center">
                             <Image
                                 src="/justhired_logo.png"
                                 alt="JustHired Logo"
@@ -80,7 +95,7 @@ export const AuthSidebar = ({ children }: AuthSidebarProps) => {
                                 className="object-contain h-10 w-auto"
                                 priority
                             />
-                            <p>JustHired</p>
+                            <p className="ml-2 font-semibold text-neutral-700 dark:text-neutral-200">JustHired</p>
                         </div>
 
                         {/* Navigation Links */}
@@ -94,11 +109,12 @@ export const AuthSidebar = ({ children }: AuthSidebarProps) => {
                                     <SidebarLink
                                         link={{
                                             ...item,
-                                            href: item.href === "#" ? pathname : item.href,
+                                            // Don't change href for SidebarLink, let it handle display
+                                            href: item.href,
                                         }}
                                         className={`
-                                            ${pathname === item.href
-                                                ? "bg-neutral-200 dark:bg-neutral-700 rounded-md text-center"
+                                            ${isActiveRoute(item.href)
+                                                ? "bg-neutral-200 dark:bg-neutral-700 rounded-md"
                                                 : "hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md"
                                             }
                                             ${item.href === "#"
@@ -121,7 +137,7 @@ export const AuthSidebar = ({ children }: AuthSidebarProps) => {
                             link={{
                                 label: "Logout",
                                 href: "/login",
-                                icon: <IconLogout className="text-black text-center h-5 w-5 shrink-0" />,
+                                icon: <IconLogout className="text-black h-5 w-5 shrink-0" />,
                             }}
                         />
                     </div>
@@ -130,7 +146,7 @@ export const AuthSidebar = ({ children }: AuthSidebarProps) => {
 
             {/* Main Content Area - Fixed for mobile */}
             <div className="flex-1 overflow-y-auto pt-16 md:pt-0">
-                <main >
+                <main>
                     {children}
                 </main>
             </div>

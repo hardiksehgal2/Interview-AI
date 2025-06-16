@@ -54,6 +54,8 @@ const CompanyProfile: React.FC = () => {
     const [isLoaded, setIsLoaded] = useState(false);
     const [selectedCity, setSelectedCity] = useState<City | null>(null);
     const [isCityOpen, setIsCityOpen] = useState(false);
+    const [isLogoViewerOpen, setIsLogoViewerOpen] = useState(false);
+
     const router = useRouter();
     const handleCitySelect = (city: City) => {
         setSelectedCity(city);
@@ -180,9 +182,9 @@ const CompanyProfile: React.FC = () => {
                                                 <Building2 className="w-12 h-12 text-indigo-600" />
                                             )}
                                         </div>
-                                        <button className="absolute -bottom-2 -right-2 w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-indigo-400">
+                                        {/* <button className="absolute -bottom-2 -right-2 w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-indigo-400">
                                             <Camera className="w-4 h-4 text-white" />
-                                        </button>
+                                        </button> */}
                                     </div>
 
                                     <div>
