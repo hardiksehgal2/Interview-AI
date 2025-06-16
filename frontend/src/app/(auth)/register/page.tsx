@@ -10,10 +10,10 @@ import { useRouter } from 'next/navigation';
 interface FormData {
     name: string;
     description: string;
-    no_of_employees: string;
+    size: string;
     email: string;
-    sector: string;
-    company_type: string;
+    industry: string;
+    type: string;
     password: string;
     confirmPassword: string;
 }
@@ -21,10 +21,10 @@ interface FormData {
 interface FormErrors {
     name?: string;
     description?: string;
-    no_of_employees?: string;
+    size?: string;
     email?: string;
-    sector?: string;
-    company_type?: string;
+    industry?: string;
+    type?: string;
     password?: string;
     confirmPassword?: string;
 }
@@ -33,10 +33,10 @@ const Register = () => {
     const [formData, setFormData] = useState<FormData>({
         name: '',
         description: '',
-        no_of_employees: '',
+        size: '',
         email: '',
-        sector: '',
-        company_type: '',
+        industry: '',
+        type: '',
         password: '',
         confirmPassword: ''
     });
@@ -89,13 +89,13 @@ const Register = () => {
             newErrors.description = 'Description must be less than 2000 characters';
         }
 
-        const employeeCount = parseInt(formData.no_of_employees);
-        if (!formData.no_of_employees) {
-            newErrors.no_of_employees = 'Number of employees is required';
+        const employeeCount = parseInt(formData.size);
+        if (!formData.size) {
+            newErrors.size = 'Number of employees is required';
         } else if (isNaN(employeeCount) || employeeCount < 1) {
-            newErrors.no_of_employees = 'Must be at least 1 employee';
+            newErrors.size = 'Must be at least 1 employee';
         } else if (employeeCount > 1000000) {
-            newErrors.no_of_employees = 'Must be less than 1,000,000 employees';
+            newErrors.size = 'Must be less than 1,000,000 employees';
         }
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -143,10 +143,10 @@ const Register = () => {
             const submitData = {
                 name: formData.name.trim(),
                 description: formData.description.trim(),
-                no_of_employees: parseInt(formData.no_of_employees),
+                size: parseInt(formData.size),
                 email: formData.email.toLowerCase().trim(),
-                sector: formData.sector || null,
-                company_type: formData.company_type || null,
+                industry: formData.industry || null,
+                type: formData.type || null,
                 password: formData.password
             };
 
@@ -168,10 +168,10 @@ const Register = () => {
             setFormData({
                 name: '',
                 description: '',
-                no_of_employees: '',
+                size: '',
                 email: '',
-                sector: '',
-                company_type: '',
+                industry: '',
+                type: '',
                 password: '',
                 confirmPassword: ''
             });
@@ -249,45 +249,45 @@ const Register = () => {
 
                         {/* Number of Employees */}
                         <div>
-                            <label htmlFor="no_of_employees" className="block text-sm font-semibold text-gray-700 mb-2">
+                            <label htmlFor="size" className="block text-sm font-semibold text-gray-700 mb-2">
                                 Number of Employees *
                             </label>
                             <div className="relative">
                                 <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                                 <input
                                     type="number"
-                                    id="no_of_employees"
-                                    name="no_of_employees"
-                                    value={formData.no_of_employees}
+                                    id="size"
+                                    name="size"
+                                    value={formData.size}
                                     onChange={handleInputChange}
-                                    className={`w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${errors.no_of_employees ? 'border-red-500' : 'border-gray-300'
+                                    className={`w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${errors.size ? 'border-red-500' : 'border-gray-300'
                                         }`}
                                     placeholder="50"
                                     min="1"
                                     max="1000000"
                                 />
                             </div>
-                            {errors.no_of_employees && <p className="mt-1 text-xs sm:text-sm text-red-600">{errors.no_of_employees}</p>}
+                            {errors.size && <p className="mt-1 text-xs sm:text-sm text-red-600">{errors.size}</p>}
                         </div>
 
                         {/* Company Sector and Type Row */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                             {/* Company Sector */}
                             <div>
-                                <label htmlFor="sector" className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Industry Sector
+                                <label htmlFor="industry" className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Industry 
                                 </label>
                                 <select
-                                    id="sector"
-                                    name="sector"
-                                    value={formData.sector}
+                                    id="industry"
+                                    name="industry"
+                                    value={formData.industry}
                                     onChange={handleInputChange}
                                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                                 >
-                                    <option value="">Select sector (optional)</option>
-                                    {companySectors.map(sector => (
-                                        <option key={sector.value} value={sector.value}>
-                                            {sector.label}
+                                    <option value="">Select industry (optional)</option>
+                                    {companySectors.map(industry => (
+                                        <option key={industry.value} value={industry.value}>
+                                            {industry.label}
                                         </option>
                                     ))}
                                 </select>
@@ -295,13 +295,13 @@ const Register = () => {
 
                             {/* Company Type */}
                             <div>
-                                <label htmlFor="company_type" className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label htmlFor="type" className="block text-sm font-semibold text-gray-700 mb-2">
                                     Company Type
                                 </label>
                                 <select
-                                    id="company_type"
-                                    name="company_type"
-                                    value={formData.company_type}
+                                    id="type"
+                                    name="type"
+                                    value={formData.type}
                                     onChange={handleInputChange}
                                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                                 >

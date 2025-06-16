@@ -605,7 +605,7 @@ function JobPostingForm() {
                           )
                         })
                       ) : skillSearch.trim() ? (
-                        <CommandEmpty>No skills found.</CommandEmpty>
+                        <CommandEmpty><p className="text-red-500">Skill already Added</p></CommandEmpty>
                       ) : (
                         <div className="p-4 text-sm text-gray-500 text-center">
                           Start typing to search for skills...
