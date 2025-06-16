@@ -24,8 +24,8 @@ export function NavbarDemo() {
       link: "/careers",
     },
     {
-      name: "Contact",
-      link: "#contact",
+      name: "Companies",
+      link: "/companies",
     },
   ];
 

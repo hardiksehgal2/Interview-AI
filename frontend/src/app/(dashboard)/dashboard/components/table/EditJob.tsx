@@ -468,7 +468,7 @@ const EditJob: React.FC<EditJobProps> = ({ jobId, isOpen, onClose, onJobUpdated 
                                                     />
                                                 </div>
                                                 <CommandEmpty>No city found.</CommandEmpty>
-                                                <div className="max-h-60 overflow-y-auto">
+                                                <div className="max-h-60">
                                                     <CommandList>
                                                         <CommandGroup>
                                                             {(citiesData as City[]).map((city) => (
@@ -547,7 +547,7 @@ const EditJob: React.FC<EditJobProps> = ({ jobId, isOpen, onClose, onJobUpdated 
                                                         className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
                                                     />
                                                 </div>
-                                                <div className="max-h-60 overflow-y-auto">
+                                                <div className="max-h-60 ">
                                                     <CommandList>
                                                         {skillSearch.trim() && !filteredSkills.includes(skillSearch.trim()) && !Object.values(formData.skills).includes(skillSearch.trim()) && (
                                                             <CommandGroup>

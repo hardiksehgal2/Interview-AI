@@ -16,12 +16,14 @@ import {
     Camera,
     Crown,
     Building,
+    ZoomIn,
 } from 'lucide-react';
 import { useRouter } from "next/navigation";
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { TokenManager } from '@/utils/tokenManager';
 import { toast } from 'react-hot-toast';
 import AxiosInstances from '@/services/AxiosInstance';
@@ -54,13 +56,13 @@ const CompanyProfile: React.FC = () => {
     const [isLoaded, setIsLoaded] = useState(false);
     const [selectedCity, setSelectedCity] = useState<City | null>(null);
     const [isCityOpen, setIsCityOpen] = useState(false);
-    const [isLogoViewerOpen, setIsLogoViewerOpen] = useState(false);
 
     const router = useRouter();
     const handleCitySelect = (city: City) => {
         setSelectedCity(city);
         setIsCityOpen(false);
     };
+
     // Fetch company from API on mount
     useEffect(() => {
         const fetchCompany = async () => {
@@ -170,22 +172,53 @@ const CompanyProfile: React.FC = () => {
                         <CardContent className="p-8">
                             <div className="flex flex-col md:flex-row items-start md:items-center justify-between">
                                 <div className="flex items-center space-x-6 mb-6 md:mb-0">
-                                    <div className="relative group">
-                                        <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center shadow-lg">
-                                            {company.logo_url ? (
-                                                <img
-                                                    src={company.logo_url}
-                                                    alt={company.name}
-                                                    className="w-16 h-16 object-contain"
-                                                />
-                                            ) : (
-                                                <Building2 className="w-12 h-12 text-indigo-600" />
-                                            )}
-                                        </div>
-                                        {/* <button className="absolute -bottom-2 -right-2 w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-indigo-400">
-                                            <Camera className="w-4 h-4 text-white" />
-                                        </button> */}
-                                    </div>
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <div className="relative group">
+                                                <div 
+                                                    className={`w-24 h-24 bg-white rounded-2xl flex items-center justify-center shadow-lg transition-all duration-200 ${
+                                                        company.logo_url 
+                                                            ? 'cursor-pointer hover:shadow-xl hover:scale-105' 
+                                                            : ''
+                                                    }`}
+                                                >
+                                                    {company.logo_url ? (
+                                                        <img
+                                                            src={company.logo_url}
+                                                            alt={company.name}
+                                                            className="w-16 h-16 object-contain"
+                                                        />
+                                                    ) : (
+                                                        <Building2 className="w-12 h-12 text-indigo-600" />
+                                                    )}
+                                                </div>
+                                                
+                                                {/* Zoom indicator - only show if there's a logo */}
+                                                {company.logo_url && (
+                                                    <div className="absolute inset-0 cursor-pointer bg-black bg-opacity-0 hover:bg-opacity-20 rounded-2xl flex items-center justify-center transition-all duration-200 opacity-0 group-hover:opacity-100">
+                                                        <ZoomIn className="w-6 h-6 text-white" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </DialogTrigger>
+                                        
+                                        <DialogContent className="w-6xl max-h-[90vh] p-0">
+                                            <DialogHeader className="p-6 pb-2">
+                                                <DialogTitle className="text-xl font-semibold">
+                                                    {company.name} Logo
+                                                </DialogTitle>
+                                            </DialogHeader>
+                                            <div className="px-6 pb-6">
+                                                    {company.logo_url && (
+                                                        <img
+                                                            src={company.logo_url}
+                                                            alt={`${company.name} logo`}
+                                                            className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-lg"
+                                                        />
+                                                    )}
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
 
                                     <div>
                                         <div className="flex items-center space-x-3 mb-2">
