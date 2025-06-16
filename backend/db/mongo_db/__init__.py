@@ -1,360 +1,506 @@
-# backend/auth/mongo_db/mongo_op.py
-import datetime
-from typing import List, Optional, Dict, Any
-import bcrypt
-from bson import ObjectId
-from fastapi import HTTPException
-from pymongo.errors import DuplicateKeyError
-from db.models.company import CompanyCreate, CompanyInDB, CompanyResponse
+from db.models.all_models import *
+from db.models.documents import *
 from config import load_env
+from beanie import init_beanie
+from motor.motor_asyncio import AsyncIOMotorClient
+import bcrypt
+from datetime import datetime, timedelta
+import jwt
+env = None
 
-# import services.mongo_op as mongo_service
-
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from db.models.interview import InterviewDataStorage, MessageEntry
-
-env = load_env.Environment()
-MONGO_URI = env.MONGO_URI
-DATABASE_NAME = env.DATABASE_NAME
-client = None
-db = None
-JD_COLLECTION = env.JD_COLLECTION
-RESUME_COLLECTION = env.RESUME_COLLECTION
-INTERVIEW_DATA_COLLECTION = env.INTERVIEW_DATA_COLLECTION
-COMPANY_COLLECTION = env.COMPANY_COLLECTION
-
-async def create_company_index():
-    """Create unique index on email field for companies"""
-    try:
-        await db[COMPANY_COLLECTION].create_index("email", unique=True)
-        print("Company email index created successfully")
-    except Exception as e:
-        print(f"Error creating company index: {str(e)}")
-
-async def connect_to_mongo():
-    global client, db
-    try:
-        if client is None:
-            client = AsyncIOMotorClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-        
-        await client.admin.command('ping')
-        db = client[DATABASE_NAME]
-        
-        # Create company index
-        await create_company_index()
-        
-        print("Successfully connected to MongoDB")
-    except Exception as e:
-        print(f"Error connecting to MongoDB: {str(e)}")
-        raise e
-
-async def close_mongo_connection():
-    global client
-    if client:
-        client.close()
-
-
-
-async def save_jd(domain: str, jd_text: str) -> Dict[str, Any]:
-    result = await db[JD_COLLECTION].update_one(
-        {"domain": domain},
-        {"$set": {"domain": domain, "jd_text": jd_text}},
-        upsert=True
+async def beanieinit():
+    global env
+    env = load_env.Environment()
+    client = AsyncIOMotorClient(env.MONGO_URI)
+    db = env.DATABASE_NAME
+    await init_beanie(
+        database=client[db],
+        document_models=[
+            CompanyDoc, CompanyUserDoc, JobDescriptionDoc, CandidateDoc,
+            JobApplicationDoc, InterviewDoc, InterviewQuestionDoc, InterviewAnswerDoc,
+            MessageHistoryDoc, NotificationDoc, EmailLogDoc, ProctorLogDoc,
+            SystemSettingDoc, SkillsMasterDoc, InterviewAnalyticsDoc
+        ]
     )
-    if result.upserted_id:
-        return {"id": str(result.upserted_id), "domain": domain, "status": "created"}
-    elif result.modified_count > 0:
-        doc = await db[JD_COLLECTION].find_one({"domain": domain})
-        return {"id": str(doc["_id"]) if doc else None, "domain": domain, "status": "updated"}
-    else:
-        doc = await db[JD_COLLECTION].find_one({"domain": domain})
-        if doc:
-            return {"id": str(doc["_id"]), "domain": domain, "status": "exists_no_change"}
-    return {"error": "Failed to save or update job description"}
 
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-async def get_jd_by_domain(domain: str):
-    try:
-        if domain == 'all':
-            cursor = db[JD_COLLECTION].find()
-        else:
-            cursor = db[JD_COLLECTION].find({"domain": domain})
-        jd_list = await cursor.to_list()
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
-        for jd in jd_list:
-            if "_id" in jd:
-                jd["id"] = str(jd.pop("_id"))
+def create_access_token(data: dict):
+    expire = datetime.utcnow() + timedelta(hours=24)
+    to_encode = data.copy()
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, "3GJpGVgA+PNPlP+yLU8tA7sN3k0GPDx6QA98vkdjSts=", algorithm="HS256")
 
-        return jd_list
-    except Exception as e:
-        print(f"Error fetching job descriptions: {e}")
-        return []
+async def authenticate_company(email: str, password: str) -> Optional[CompanyDoc]:
+    """Authenticate company by email and password"""
+    print(email, password)
+    company = await CompanyDoc.find_one(CompanyDoc.email == email)
+    if company and verify_password(password, company.password_hash):
+        return company
+    return None
 
+async def authenticate_company_user(email: str, password: str) -> Optional[CompanyUserDoc]:
+    """Authenticate company user by email and password"""
+    user = await CompanyUserDoc.find_one(CompanyUserDoc.email == email)
+    if user and verify_password(password, user.password_hash):
+        return user
+    return None
 
-async def get_jd_by_id(jd_id: str) -> Optional[Dict[str, Any]]:
-    try:
-        jd = await db[JD_COLLECTION].find_one({"_id": ObjectId(jd_id)})
-        if jd:
-            jd["id"] = str(jd.pop("_id"))
-            return jd
-        return None
-    except Exception as e:
-        print(f"Error fetching job description by ID: {e}")
-        return None
-
-
-async def save_resume(candidate_name: str, resume_base64: str, resume_txt: str, jd_id: str):
-    result = await db[RESUME_COLLECTION].update_one(
-        {"candidate_name": candidate_name},
-        {"$set": {"candidate_name": candidate_name, "resume_base64": resume_base64, "resume_txt": resume_txt, "jd_id": jd_id}},
-        upsert=True
+def create_company_login_response(company: CompanyDoc) -> LoginResponse:
+    """Create login response for company"""
+    token_data = {
+        "user_id": str(company.id),
+        "email": company.email,
+        "user_type": "company"
+    }
+    access_token = create_access_token(token_data)
+    return LoginResponse(
+        access_token=access_token,
+        expires_in=86400,
+        user_type="company",
+        user_data={"id": str(company.id), "name": company.name, "email": company.email}
     )
-    if result.upserted_id:
-        return {"id": str(result.upserted_id), "candidate_name": candidate_name, "status": "created"}
-    elif result.modified_count > 0:
-        doc = await db[RESUME_COLLECTION].find_one({"candidate_name": candidate_name, "jd_id": jd_id})
-        return {"id": str(doc["_id"]) if doc else None, "candidate_name": candidate_name, "status": "updated"}
-    else:
-        doc = await db[RESUME_COLLECTION].find_one({"candidate_name": candidate_name, "jd_id": jd_id})
-        if doc:
-            return {"id": str(doc["_id"]), "candidate_name": candidate_name, "status": "exists_no_change"}
-    return {"error": "Failed to save or update resume"}
 
-
-async def get_resume_by_name(candidate_name: str = None, resume_id: str = None):
-    if resume_id:
-        resume = await db[RESUME_COLLECTION].find_one({"_id": ObjectId(resume_id)})
-    elif candidate_name:
-        resume = await db[RESUME_COLLECTION].find_one({"candidate_name": candidate_name})
-    else:
-        raise ValueError("Either candidate_name or resume_id must be provided")
-    if resume:
-        resume["id"] = str(resume.pop("_id"))
-    return resume
-
-
-async def get_resume_by_jd(jd_id: str):
-    try:
-        cursor = db[RESUME_COLLECTION].find({"jd_id": jd_id})
-        resumes = await cursor.to_list()
-
-        for res in resumes:
-            if "_id" in res:
-                res["id"] = str(res.pop("_id"))
-
-        return resumes
-    except Exception as e:
-        print(f"Error fetching all resumes: {e}")
-        return []
-
-
-async def save_interview_data(data: InterviewDataStorage):
-    result = await db[INTERVIEW_DATA_COLLECTION].update_one(
-        {"candidate_name": data.candidate_name, "candidate_email": data.candidate_email}, # Composite key
-        {"$set": data.model_dump()},
-        upsert=True
+def create_company_user_login_response(user: CompanyUserDoc) -> LoginResponse:
+    """Create login response for company user"""
+    token_data = {
+        "user_id": str(user.id),
+        "email": user.email,
+        "user_type": "company_user",
+        "company_id": str(user.company_id)
+    }
+    access_token = create_access_token(token_data)
+    return LoginResponse(
+        access_token=access_token,
+        expires_in=86400,
+        user_type="company_user",
+        user_data={"id": str(user.id), "name": user.name, "email": user.email, "role": user.role}
     )
-    if result.upserted_id:
-        return {"id": str(result.upserted_id), "status": "created"}
-    elif result.modified_count > 0:
-        doc = await db[INTERVIEW_DATA_COLLECTION].find_one(
-            {"candidate_name": data.candidate_name, "candidate_email": data.candidate_email}
-        )
-        return {"id": str(doc["_id"]) if doc else None, "status": "updated"}
-    else:
-        doc = await db[INTERVIEW_DATA_COLLECTION].find_one(
-            {"candidate_name": data.candidate_name, "candidate_email": data.candidate_email}
-        )
-        if doc:
-            return {"id": str(doc["_id"]), "status": "exists_no_change"}
-    return {"error": "Failed to save or update interview data"}
 
+# ===== COMPANY OPERATIONS =====
+async def find_company_by_email(email: str) -> Optional[CompanyDoc]:
+    """Find company by email"""
+    return await CompanyDoc.find_one({"email": email})
 
-async def update_interview_data(interview_id: str, status: str, message_history: List[Dict[str, str]]) -> Dict[str, Any]:
-    """
-    Update interview status and message history in MongoDB
-    """
-    try:
-        existing_data = await db[INTERVIEW_DATA_COLLECTION].find_one({"_id": ObjectId(interview_id)})
-        if existing_data and existing_data.get("status") in ["interview_completed", "summary_generated"]:
-            return {"error": f"Interview with ID {interview_id} is already completed."}
-        
-        result = await db[INTERVIEW_DATA_COLLECTION].update_one(
-            {"_id": ObjectId(interview_id)},
-            {"$set": {
-                "status": status,
-                "message_history": message_history,
-                "completed_at": datetime.datetime.utcnow()
-            }}
-        )
-        
-        if result.modified_count == 0:
-            return {"error": f"No interview data found with ID {interview_id}"}
-        
-        return {"message": f"Interview data updated successfully", "id": interview_id}
-    except Exception as e:
-        print(f"Error updating interview data: {str(e)}")
-        return {"error": f"Error updating interview data: {str(e)}"}
+async def create_company(company_data: dict, password: str) -> CompanyDoc:
+    """Create a new company"""
+    hashed_password = hash_password(password)
+    company_doc = CompanyDoc(
+        **company_data,
+        password_hash=hashed_password
+    )
+    await company_doc.insert()
+    return company_doc
 
-async def update_candidate_report(interview_id: str, analysis_data: Dict[str, Any], status: str):
-    try:
-        result = await db[INTERVIEW_DATA_COLLECTION].update_one(
-            {"_id": ObjectId(interview_id)},
-            {"$set": {
-                "analysis": analysis_data,
-                "status": status
-            }}
-        )
-        
-        if result.modified_count == 0:
-            return {"error": f"No interview data found with ID {interview_id}"}
-        
-        return {"message": f"Interview report updated successfully", "id": interview_id}
-    except Exception as e:
-        print(f"Error updating candidate report: {str(e)}")
-        return {"error": f"Error updating candidate report: {str(e)}"}
-
-
-async def get_interview_data_by_id(id: str) -> Optional[Dict[str, Any]]:
-    data = await db[INTERVIEW_DATA_COLLECTION].find_one({"_id": ObjectId(id)})
-    return data
-
-async def debug_db_connection():
-    """Debug function to check database status"""
-    if db is not None:
-        try:
-            collections = await db.list_collection_names()
-            print(f"Available collections: {collections}")
-        except Exception as e:
-            print(f"Error listing collections: {e}")
-
-async def create_company_index():
-    """Create unique index on email field"""
-    try:
-        if db is None:
-            print("Database connection not available for index creation")
-            return
-        await db[COMPANY_COLLECTION].create_index("email", unique=True)
-        print("Company email index created successfully")
-    except Exception as e:
-        print(f"Error creating company index: {str(e)}")
-
-async def hash_password(password: str) -> str:
-    """Hash password using bcrypt"""
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
-    return hashed.decode('utf-8')
-
-async def verify_password(password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
-    return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
-
-async def save_company(company_data: CompanyCreate) -> CompanyResponse:
-    """Save a new company to the database"""
-    try:
-        await debug_db_connection()
-        if db is None:
-            raise HTTPException(status_code=500, detail="Database connection not available")
-        
-        # Hash the password
-        hashed_password = await hash_password(company_data.password)
-        
-        # Create company document
-        company_dict = company_data.dict(exclude={"password"})
-        company_dict["password_hash"] = hashed_password
-        company_dict["created_at"] = datetime.datetime.utcnow()
-        company_dict["updated_at"] = datetime.datetime.utcnow()
-        company_dict["is_active"] = True
-        
-        # Insert into database
-        result = await db[COMPANY_COLLECTION].insert_one(company_dict)
-        
-        # Retrieve the created company
-        created_company = await db[COMPANY_COLLECTION].find_one({"_id": result.inserted_id})
-        
-        if created_company:
-            created_company["_id"] = str(created_company["_id"])
-            return CompanyResponse(**created_company)
-        else:
-            raise HTTPException(status_code=500, detail="Failed to retrieve created company")
-            
-    except DuplicateKeyError:
-        raise HTTPException(status_code=400, detail="Company with this email already exists")
-    except Exception as e:
-        print(f"Error saving company: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to save company")
-
-async def get_company_by_id(company_id: str) -> Optional[CompanyResponse]:
+async def get_company_by_id(company_id: str) -> Optional[CompanyDoc]:
     """Get company by ID"""
+    return await CompanyDoc.get(PydanticObjectId(company_id))
+
+async def update_company_by_id(company_id: str, update_data: dict) -> Optional[CompanyDoc]:
+    """Update company by ID"""
+    company = await CompanyDoc.get(PydanticObjectId(company_id))
+    if company and update_data:
+        update_data["updated_at"] = datetime.utcnow()
+        await company.update({"$set": update_data})
+        return await CompanyDoc.get(company.id)
+    return company
+
+async def list_all_companies(skip: int = 0, limit: int = 10) -> List[CompanyDoc]:
+    """List all companies with pagination"""
+    return await CompanyDoc.find_all().skip(skip).limit(limit).to_list()
+
+# ===== COMPANY USER OPERATIONS =====
+async def find_user_by_email(email: str) -> Optional[CompanyUserDoc]:
+    """Find company user by email"""
+    return await CompanyUserDoc.find_one({"email": email})
+
+async def get_user_by_id(user_id: str) -> Optional[CompanyUserDoc]:
+    """Get company user by ID"""
+    return await CompanyUserDoc.get(PydanticObjectId(user_id))
+
+async def create_company_user(company_id: str, user_data: dict, password: str, created_by: Optional[str] = None) -> CompanyUserDoc:
+    """Create a new company user"""
+    hashed_password = hash_password(password)
+    user_doc = CompanyUserDoc(
+        **user_data,
+        company_id=PydanticObjectId(company_id),
+        password_hash=hashed_password,
+        created_by=PydanticObjectId(created_by) if created_by else None
+    )
+    await user_doc.insert()
+    return user_doc
+
+async def list_company_users(company_id: str) -> List[CompanyUserDoc]:
+    """List all users in a company"""
+    return await CompanyUserDoc.find({"company_id": PydanticObjectId(company_id)}).to_list()
+
+async def find_company_user(user_id: str, company_id: str) -> Optional[CompanyUserDoc]:
+    """Find specific company user"""
+    return await CompanyUserDoc.find_one({
+        "_id": PydanticObjectId(user_id),
+        "company_id": PydanticObjectId(company_id)
+    })
+
+async def update_company_user(user: CompanyUserDoc, update_data: dict) -> CompanyUserDoc:
+    """Update company user"""
+    if update_data:
+        await user.update({"$set": update_data})
+    return await CompanyUserDoc.get(user.id)
+
+# ===== JOB DESCRIPTION OPERATIONS =====
+async def create_job_description(company_id: str, job_data: dict, created_by: str) -> JobDescriptionDoc:
+    """Create a new job description"""
+    job_doc = JobDescriptionDoc(
+        **job_data,
+        company_id=PydanticObjectId(company_id),
+        created_by=PydanticObjectId(created_by)
+    )
+    await job_doc.insert()
+    return job_doc
+
+async def list_company_jobs(company_id: str, is_active: Optional[bool] = None, skip: int = 0, limit: int = 10) -> List[JobDescriptionDoc]:
+    """List jobs for a company"""
+    query = {"company_id": PydanticObjectId(company_id)}
+    if is_active is not None:
+        query["is_active"] = is_active
+    
+    return await JobDescriptionDoc.find(query).skip(skip).limit(limit).to_list()
+
+async def list_jobs_with_filters(
+    is_active: bool = True,
+    experience_level: Optional[ExperienceLevel] = None,
+    employment_type: Optional[EmploymentType] = None,
+    location: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 10
+) -> List[JobDescriptionDoc]:
+    """List jobs with filters"""
+    query = {"is_active": is_active}
+    
+    if experience_level:
+        query["experience_level"] = experience_level
+    if employment_type:
+        query["employment_type"] = employment_type
+    if location:
+        query["location"] = {"$regex": location, "$options": "i"}
+    
+    return await JobDescriptionDoc.find(query).skip(skip).limit(limit).to_list()
+
+async def get_job_by_id(job_id: str) -> Optional[JobDescriptionDoc]:
+    """Get job by ID"""
     try:
-        if db is None:
-            return None
-            
-        if not ObjectId.is_valid(company_id):
-            return None
-            
-        company = await db[COMPANY_COLLECTION].find_one({"_id": ObjectId(company_id)})
-        
-        if company:
-            company["_id"] = str(company["_id"])
-            return CompanyResponse(**company)
-        return None
-        
-    except Exception as e:
-        print(f"Error getting company by ID: {str(e)}")
+        return await JobDescriptionDoc.get(PydanticObjectId(job_id))
+    except:
         return None
 
-async def get_companies_by_sector(sector: str, limit: int = 10, skip: int = 0) -> List[CompanyResponse]:
-    """Get companies by sector"""
+async def update_job_by_id(job_id: str, update_data: dict) -> Optional[JobDescriptionDoc]:
+    """Update job by ID"""
     try:
-        if db is None:
-            return []
-            
-        cursor = db[COMPANY_COLLECTION].find(
-            {"sector": sector, "is_active": True}
-        ).skip(skip).limit(limit)
-        
-        companies = []
-        async for company in cursor:
-            company["_id"] = str(company["_id"])
-            companies.append(CompanyResponse(**company))
-        
-        return companies
-        
-    except Exception as e:
-        print(f"Error getting companies by sector: {str(e)}")
-        return []
+        job = await JobDescriptionDoc.get(PydanticObjectId(job_id))
+        if job and update_data:
+            update_data["updated_at"] = datetime.utcnow()
+            await job.update({"$set": update_data})
+            return await JobDescriptionDoc.get(job.id)
+        return job
+    except:
+        return None
 
-async def get_company_by_email(email: str) -> Optional[CompanyInDB]:
-    """Get company by email (for authentication)"""
+async def deactivate_job(job_id: str) -> Optional[JobDescriptionDoc]:
+    """Soft delete job (set is_active = False)"""
     try:
-        if db is None:
+        job = await JobDescriptionDoc.get(PydanticObjectId(job_id))
+        if job:
+            await job.update({"$set": {"is_active": False, "updated_at": datetime.utcnow()}})
+            return job
+        return None
+    except:
+        return None
+
+async def check_job_authorization(job: JobDescriptionDoc, current_user: dict) -> bool:
+    """Check if user is authorized to modify the job"""
+    return ((current_user["user_type"] == "company" and current_user["user_id"] == str(job.company_id)) or
+            (current_user["user_type"] == "company_user" and current_user.get("company_id") == str(job.company_id)))
+
+async def find_candidate_by_email(email: str) -> Optional[CandidateDoc]:
+    """Find candidate by email"""
+    return await CandidateDoc.find_one({"email": email})
+
+async def create_candidate(candidate_data: dict) -> CandidateDoc:
+    """Create a new candidate"""
+    candidate_doc = CandidateDoc(**candidate_data)
+    await candidate_doc.insert()
+    return candidate_doc
+
+async def get_candidate_by_id(candidate_id: str) -> Optional[CandidateDoc]:
+    """Get candidate by ID"""
+    try:
+        return await CandidateDoc.get(PydanticObjectId(candidate_id))
+    except:
+        return None
+
+async def update_candidate_by_id(candidate_id: str, update_data: dict) -> Optional[CandidateDoc]:
+    """Update candidate by ID"""
+    try:
+        candidate = await CandidateDoc.get(PydanticObjectId(candidate_id))
+        if candidate and update_data:
+            update_data["updated_at"] = datetime.utcnow()
+            await candidate.update({"$set": update_data})
+            return await CandidateDoc.get(candidate.id)
+        return candidate
+    except:
+        return None
+
+async def list_all_candidates(skip: int = 0, limit: int = 10) -> List[CandidateDoc]:
+    """List all candidates with pagination"""
+    return await CandidateDoc.find_all().skip(skip).limit(limit).to_list()
+
+async def get_job_for_application(job_id: str) -> Optional[JobDescriptionDoc]:
+    """Get job for application validation"""
+    try:
+        job = await JobDescriptionDoc.get(PydanticObjectId(job_id))
+        return job if job and job.is_active else None
+    except:
+        return None
+
+async def get_candidate_for_application(candidate_id: str) -> Optional[CandidateDoc]:
+    """Get candidate for application validation"""
+    try:
+        return await CandidateDoc.get(PydanticObjectId(candidate_id))
+    except:
+        return None
+
+async def find_existing_application(candidate_id: str, job_id: str) -> Optional[JobApplicationDoc]:
+    """Check if candidate already applied for this job"""
+    return await JobApplicationDoc.find_one({
+        "candidate_id": PydanticObjectId(candidate_id),
+        "jd_id": PydanticObjectId(job_id)
+    })
+
+async def create_job_application(candidate_id: str, job_id: str, company_id: str) -> JobApplicationDoc:
+    """Create a new job application"""
+    application_doc = JobApplicationDoc(
+        candidate_id=PydanticObjectId(candidate_id),
+        jd_id=PydanticObjectId(job_id),
+        company_id=PydanticObjectId(company_id)
+    )
+    await application_doc.insert()
+    return application_doc
+
+async def increment_job_applications_count(job_id: str):
+    """Increment applications count for a job"""
+    job = await JobDescriptionDoc.get(PydanticObjectId(job_id))
+    if job:
+        await job.update({"$inc": {"applications_count": 1}})
+
+async def list_company_applications(
+    company_id: str,
+    status: Optional[ApplicationStatus] = None,
+    jd_id: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 10
+) -> List[JobApplicationDoc]:
+    """List applications for a company with filters"""
+    query = {"company_id": PydanticObjectId(company_id)}
+    
+    if status:
+        query["application_status"] = status
+    if jd_id:
+        query["jd_id"] = PydanticObjectId(jd_id)
+    
+    return await JobApplicationDoc.find(query).skip(skip).limit(limit).to_list()
+
+async def get_application_by_id(application_id: str) -> Optional[JobApplicationDoc]:
+    """Get application by ID"""
+    try:
+        return await JobApplicationDoc.get(PydanticObjectId(application_id))
+    except:
+        return None
+
+async def update_application_by_id(
+    application_id: str, 
+    update_data: dict, 
+    current_user_id: str,
+    jd_screening_passed: Optional[bool] = None
+) -> Optional[JobApplicationDoc]:
+    """Update application by ID"""
+    try:
+        application = await JobApplicationDoc.get(PydanticObjectId(application_id))
+        if not application:
             return None
-            
-        company = await db[COMPANY_COLLECTION].find_one({"email": email})
         
-        if company:
-            company["_id"] = str(company["_id"])
-            return CompanyInDB(**company)
-        return None
+        # Set screening details if status changed to screened
+        if jd_screening_passed is not None:
+            update_data["screened_at"] = datetime.utcnow()
+            update_data["screened_by"] = PydanticObjectId(current_user_id)
         
-    except Exception as e:
-        print(f"Error getting company by email: {str(e)}")
+        if update_data:
+            update_data["last_updated"] = datetime.utcnow()
+            await application.update({"$set": update_data})
+        
+        return await JobApplicationDoc.get(application.id)
+    except:
         return None
 
-async def authenticate_company(email: str, password: str) -> Optional[CompanyResponse]:
-    """Authenticate company login"""
+async def check_application_authorization(application: JobApplicationDoc, current_user: dict) -> bool:
+    """Check if user is authorized to modify the application"""
+    return ((current_user["user_type"] == "company" and current_user["user_id"] == str(application.company_id)) or
+            (current_user["user_type"] == "company_user" and current_user.get("company_id") == str(application.company_id)))
+
+async def get_application_for_interview(application_id: str) -> Optional[JobApplicationDoc]:
+    """Get application for interview scheduling"""
     try:
-        company = await get_company_by_email(email)
-        
-        if company and company.is_active:
-            if await verify_password(password, company.password_hash):
-                # Return company response without password hash
-                company_dict = company.dict(exclude={"password_hash"},by_alias=True)
-                return CompanyResponse(**company_dict)
-        
+        return await JobApplicationDoc.get(PydanticObjectId(application_id))
+    except:
         return None
-        
-    except Exception as e:
-        print(f"Error authenticating company: {str(e)}")
+
+async def find_existing_interview(application_id: str) -> Optional[InterviewDoc]:
+    """Check if interview already exists for application"""
+    return await InterviewDoc.find_one({"application_id": PydanticObjectId(application_id)})
+
+async def create_interview(
+    application_id: str,
+    candidate_id: str,
+    jd_id: str,
+    company_id: str,
+    interviewer_id: Optional[str],
+    scheduled_at: datetime,
+    interview_type: str
+) -> InterviewDoc:
+    """Create a new interview"""
+    interview_doc = InterviewDoc(
+        application_id=PydanticObjectId(application_id),
+        candidate_id=PydanticObjectId(candidate_id),
+        jd_id=PydanticObjectId(jd_id),
+        company_id=PydanticObjectId(company_id),
+        interviewer_id=PydanticObjectId(interviewer_id) if interviewer_id else None,
+        scheduled_at=scheduled_at,
+        interview_type=interview_type
+    )
+    await interview_doc.insert()
+    return interview_doc
+
+async def update_application_status_for_interview(application_id: str):
+    """Update application status to interview scheduled"""
+    application = await JobApplicationDoc.get(PydanticObjectId(application_id))
+    if application:
+        await application.update({
+            "$set": {
+                "application_status": ApplicationStatus.INTERVIEW_SCHEDULED,
+                "last_updated": datetime.utcnow()
+            }
+        })
+
+async def get_interview_by_id(interview_id: str) -> Optional[InterviewDoc]:
+    """Get interview by ID"""
+    try:
+        return await InterviewDoc.get(PydanticObjectId(interview_id))
+    except:
         return None
+
+async def update_interview_by_id(
+    interview_id: str,
+    update_data: dict,
+    current_user_id: str,
+    company_decision: Optional[CompanyDecision] = None
+) -> Optional[InterviewDoc]:
+    """Update interview by ID"""
+    try:
+        interview = await InterviewDoc.get(PydanticObjectId(interview_id))
+        if not interview:
+            return None
+        
+        # Set decision timestamp if company decision is made
+        if company_decision is not None:
+            update_data["decision_made_at"] = datetime.utcnow()
+            update_data["decision_made_by"] = PydanticObjectId(current_user_id)
+            
+            # Update application status based on company decision
+            await update_application_status_for_decision(interview.application_id, company_decision)
+        
+        if update_data:
+            update_data["updated_at"] = datetime.utcnow()
+            await interview.update({"$set": update_data})
+        
+        return await InterviewDoc.get(interview.id)
+    except:
+        return None
+
+async def update_application_status_for_decision(application_id: PydanticObjectId, company_decision: CompanyDecision):
+    """Update application status based on company decision"""
+    application = await JobApplicationDoc.get(application_id)
+    if application:
+        application_update = {"last_updated": datetime.utcnow()}
+        if company_decision == CompanyDecision.SELECTED:
+            application_update["application_status"] = ApplicationStatus.SELECTED
+        elif company_decision == CompanyDecision.REJECTED:
+            application_update["application_status"] = ApplicationStatus.REJECTED
+        await application.update({"$set": application_update})
+
+async def list_company_interviews(
+    company_id: str,
+    status: Optional[InterviewStatus] = None,
+    skip: int = 0,
+    limit: int = 10
+) -> List[InterviewDoc]:
+    """List interviews for a company with filters"""
+    query = {"company_id": PydanticObjectId(company_id)}
+    
+    if status:
+        query["status"] = status
+    
+    return await InterviewDoc.find(query).skip(skip).limit(limit).to_list()
+
+async def check_interview_authorization(interview: InterviewDoc, current_user: dict) -> bool:
+    """Check if user is authorized to modify the interview"""
+    return ((current_user["user_type"] == "company" and current_user["user_id"] == str(interview.company_id)) or
+            (current_user["user_type"] == "company_user" and current_user.get("company_id") == str(interview.company_id)))
+
+# ===== INTERVIEW QUESTION OPERATIONS =====
+async def create_interview_question(
+    interview_id: str,
+    question_data: dict,
+    parent_question_id: Optional[str] = None
+) -> InterviewQuestionDoc:
+    """Create a new interview question"""
+    question_doc = InterviewQuestionDoc(
+        **question_data,
+        interview_id=PydanticObjectId(interview_id),
+        parent_question_id=PydanticObjectId(parent_question_id) if parent_question_id else None,
+        asked_at=datetime.utcnow()
+    )
+    await question_doc.insert()
+    return question_doc
+
+async def list_interview_questions(interview_id: str) -> List[InterviewQuestionDoc]:
+    """Get all questions for an interview"""
+    return await InterviewQuestionDoc.find({
+        "interview_id": PydanticObjectId(interview_id)
+    }).sort("sequence_no").to_list()
+
+# ===== INTERVIEW ANSWER OPERATIONS =====
+async def get_question_for_answer(question_id: str) -> Optional[InterviewQuestionDoc]:
+    """Get question for answer submission"""
+    try:
+        return await InterviewQuestionDoc.get(PydanticObjectId(question_id))
+    except:
+        return None
+
+async def create_interview_answer(question_id: str, answer_data: dict, interview_id: str) -> InterviewAnswerDoc:
+    """Create a new interview answer"""
+    answer_doc = InterviewAnswerDoc(
+        **answer_data,
+        question_id=PydanticObjectId(question_id),
+        interview_id=PydanticObjectId(interview_id)
+    )
+    await answer_doc.insert()
+    return answer_doc
+
+async def list_interview_answers(interview_id: str) -> List[InterviewAnswerDoc]:
+    """Get all answers for an interview"""
+    return await InterviewAnswerDoc.find({
+        "interview_id": PydanticObjectId(interview_id)
+    }).to_list()

@@ -12,7 +12,8 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-
+venv
+.idea
 .next
 # testing
 /coverage
