@@ -87,7 +87,8 @@ class BaseDBModel(BaseModel):
 class CompanyBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
-    size: Optional[int] = Field(None, ge=1)
+    secondary_email: Optional[str] = None
+    size: Optional[str] = None
     type: Optional[str] = None
     industry: Optional[str] = None
     location: Optional[str] = None
@@ -95,6 +96,11 @@ class CompanyBase(BaseModel):
     phone: Optional[str] = None
     description: Optional[str] = None
     logo_url: Optional[str] = None
+    motto: Optional[str] = None
+    tags: Optional[List[str]] = None
+    benefits: Optional[List[str]] = None
+    social: Optional[Dict[str, Any]] = None
+    more_info: Optional[Dict[str, Any]] = None
     subscription_plan: SubscriptionPlan = SubscriptionPlan.FREE
 
 class CompanyCreate(CompanyBase):
@@ -103,7 +109,8 @@ class CompanyCreate(CompanyBase):
 class CompanyUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[EmailStr] = None
-    size: Optional[int] = Field(None, ge=1)
+    secondary_email: Optional[str] = None
+    size: Optional[str] = None
     type: Optional[str] = None
     industry: Optional[str] = None
     location: Optional[str] = None
@@ -111,6 +118,11 @@ class CompanyUpdate(BaseModel):
     phone: Optional[str] = None
     description: Optional[str] = None
     logo_url: Optional[str] = None
+    motto: Optional[str] = None
+    tags: Optional[List[str]] = None
+    benefits: Optional[List[str]] = None
+    social: Optional[Dict[str, Any]] = None
+    more_info: Optional[Dict[str, Any]] = None
     # subscription_plan: Optional[SubscriptionPlan] = None
 
 class Company(CompanyBase, BaseDBModel):

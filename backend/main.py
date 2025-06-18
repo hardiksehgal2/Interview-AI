@@ -144,6 +144,14 @@ async def create_company(company: CompanyCreate):
     if existing_company:
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Check if secondary email already exists (if provided)
+    if company.secondary_email:
+        existing_secondary = await CompanyDoc.find_one(
+            CompanyDoc.secondary_email == company.secondary_email
+        )
+        if existing_secondary:
+            raise HTTPException(status_code=400, detail="Secondary email already registered")
+        
     hashed_password = hash_password(company.password)
     company_doc = CompanyDoc(
         **company.dict(exclude={"password"}),
@@ -177,26 +185,64 @@ async def update_company(
         company = await CompanyDoc.get(PydanticObjectId(company_id))
         if not company:
             raise HTTPException(status_code=404, detail="Company not found")
+        
         # Check authorization
         if current_user["user_type"] != "company" or current_user["user_id"] != company_id:
             raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Check if email is being updated and already exists
+        if company_update.email and company_update.email != company.email:
+            existing_email = await CompanyDoc.find_one(CompanyDoc.email == company_update.email)
+            if existing_email:
+                raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Check if secondary email is being updated and already exists
+        if company_update.secondary_email and company_update.secondary_email != company.secondary_email:
+            existing_secondary = await CompanyDoc.find_one(
+                CompanyDoc.secondary_email == company_update.secondary_email
+            )
+            if existing_secondary:
+                raise HTTPException(status_code=400, detail="Secondary email already registered")
         
         update_data = company_update.dict(exclude_unset=True)
         if update_data:
             update_data["updated_at"] = datetime.utcnow()
             await company.update({"$set": update_data})
-        
+            
         return await CompanyDoc.get(company.id)
+    except HTTPException:
+        raise
     except Exception:
-        raise HTTPException(status_code=403, detail="Company not found")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/companies/", response_model=List[CompanyDoc])
 async def list_companies(
     skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100)
+    limit: int = Query(10, ge=1, le=100),
+    industry: Optional[str] = Query(None, description="Filter by industry"),
+    size: Optional[str] = Query(None, description="Filter by company size"),
+    location: Optional[str] = Query(None, description="Filter by location"),
+    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)")
 ):
-    """List all companies"""
-    companies = await CompanyDoc.find_all().skip(skip).limit(limit).to_list()
+    """List all companies with optional filters"""
+    query = {}
+    
+    # Build query filters
+    if industry:
+        query["industry"] = {"$regex": industry, "$options": "i"}
+    if size:
+        query["size"] = {"$regex": size, "$options": "i"}
+    if location:
+        query["location"] = {"$regex": location, "$options": "i"}
+    if tags:
+        tag_list = [tag.strip() for tag in tags.split(",")]
+        query["tags"] = {"$in": tag_list}
+    
+    if query:
+        companies = await CompanyDoc.find(query).skip(skip).limit(limit).to_list()
+    else:
+        companies = await CompanyDoc.find_all().skip(skip).limit(limit).to_list()
+    
     return companies
 
 # ===== COMPANY USER ENDPOINTS =====
