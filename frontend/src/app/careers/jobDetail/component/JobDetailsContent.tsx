@@ -6,10 +6,6 @@ import { useRouter } from 'next/navigation';
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'  // Import remark-gfm for GitHub Flavored Markdown (tables, etc)
-import rehypeRaw from 'rehype-raw'  // For raw HTML support
-import rehypeSanitize from 'rehype-sanitize'  // For sanitizing HTML
 import AxiosInstances from '@/services/AxiosInstance'
 
 import toast, { Toaster } from 'react-hot-toast';

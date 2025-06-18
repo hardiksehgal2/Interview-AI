@@ -21,6 +21,8 @@ import { Input } from "@/components/ui/input";
 import AxiosInstances from "@/services/AxiosInstance";
 import { ShimmerGrid } from "@/components/shimmer/CompaniesSkeleton";
 import Image from "next/image";
+import { useRouter } from 'next/navigation';
+import Link from "next/link";
 interface CompanyData {
   name: string;
   email: string;
@@ -45,6 +47,7 @@ const Companies = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIndustry, setSelectedIndustry] = useState("all");
   const [isLoaded, setIsLoaded] = useState(false);
+  const router = useRouter();
 
   // Fetch companies data
   useEffect(() => {
@@ -152,6 +155,10 @@ const Companies = () => {
     return "Large";
   };
 
+  const handleApply = (id: string) => {
+    window.open(`/companies/view-profile?company_id=${id}`, '_blank');
+  };
+  
   return (
     <>
       <NavbarDemo />
@@ -257,7 +264,7 @@ const Companies = () => {
                   }`}
                   style={{ transitionDelay: `${400 + index * 100}ms` }}
                 >
-                  <Card className="group hover:shadow-xl hover:-translate-y-2 transition-all duration-300 border-0 shadow-lg overflow-hidden bg-white">
+                  <Card className="group hover:shadow-xl  hover:-translate-y-2 transition-all duration-300 border-0 shadow-lg overflow-hidden h-72 bg-white">
                     <CardContent className="p-6">
                       {/* Header */}
                       <div className="flex items-start justify-between mb-4">
@@ -320,6 +327,7 @@ const Companies = () => {
                         </div>
                         <Button
                           size="sm"
+                          onClick={()=>handleApply(company._id)}
                           className="bg-indigo-600 hover:bg-indigo-700 text-white group-hover:shadow-md transition-all"
                         >
                           View Details
