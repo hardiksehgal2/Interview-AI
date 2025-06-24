@@ -51,7 +51,7 @@ async def startup_event():
             CompanyDoc, CompanyUserDoc, JobDescriptionDoc, CandidateDoc,
             JobApplicationDoc, InterviewDoc, InterviewQuestionDoc, InterviewAnswerDoc,
             MessageHistoryDoc, NotificationDoc, EmailLogDoc, ProctorLogDoc,
-            SystemSettingDoc, SkillsMasterDoc, InterviewAnalyticsDoc
+            SystemSettingDoc, SkillsMasterDoc, InterviewAnalyticsDoc, ProfileCompletionDoc
         ]
     )
 
@@ -208,7 +208,7 @@ async def update_company(
         if update_data:
             update_data["updated_at"] = datetime.utcnow()
             await company.update({"$set": update_data})
-            
+        refresh_profile = await refresh_profile_completion(company_id, current_user)
         return await CompanyDoc.get(company.id)
     except HTTPException:
         raise
@@ -245,6 +245,168 @@ async def list_companies(
     
     return companies
 
+@app.get("/companies/{company_id}/profile-completion", response_model=ProfileCompletionResponse)
+async def get_profile_completion(
+    company_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get profile completion status"""
+    try:
+        completion_doc = await ProfileCompletionDoc.find_one(
+            ProfileCompletionDoc.company_id == company_id
+        )
+        
+        if completion_doc:
+            return ProfileCompletionResponse(
+                completion_percentage=completion_doc.completion_percentage,
+                sections=completion_doc.sections,
+                missing_fields=completion_doc.missing_fields,
+                next_steps=completion_doc.next_steps
+            )
+
+        company = await CompanyDoc.get(PydanticObjectId(company_id))
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+        
+        completion_data = calculate_profile_completion(company)
+
+        completion_doc = ProfileCompletionDoc(
+            company_id=company_id,
+            **completion_data
+        )
+        await completion_doc.insert()
+        
+        return ProfileCompletionResponse(**completion_data)
+        
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/companies/{company_id}/refresh-completion")
+async def refresh_profile_completion(
+    company_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually refresh profile completion calculation"""
+    try:
+        company = await CompanyDoc.get(PydanticObjectId(company_id))
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        completion_data = calculate_profile_completion(company)
+        completion_doc = await ProfileCompletionDoc.find_one(
+            ProfileCompletionDoc.company_id == company_id
+        )
+        
+        if completion_doc:
+            await completion_doc.update({
+                "$set": {
+                    **completion_data,
+                    "last_updated": datetime.utcnow()
+                }
+            })
+        else:
+            completion_doc = ProfileCompletionDoc(
+                company_id=company_id,
+                **completion_data
+            )
+            await completion_doc.insert()
+
+        return {"message": "Profile completion refreshed", **completion_data}
+        
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+def calculate_profile_completion(company: CompanyDoc) -> dict:
+    """Calculate profile completion and return data"""
+    sections = {}
+    missing_fields = []
+    next_steps = []
+    total_score = 0
+
+    basic_complete = all([
+        company.name and len(company.name.strip()) > 0,
+        company.email and len(company.email.strip()) > 0,
+        company.phone and len(company.phone.strip()) > 0,
+        company.size and len(company.size.strip()) > 0
+    ])
+    sections["basic_info"] = basic_complete
+    if basic_complete:
+        total_score += 25
+    else:
+        if not company.phone:
+            missing_fields.append("phone")
+        if not company.size:
+            missing_fields.append("size")
+        next_steps.append("Complete your basic information")
+    
+    details_complete = all([
+        company.industry and len(company.industry.strip()) > 0,
+        company.type and len(company.type.strip()) > 0,
+        company.location and len(company.location.strip()) > 0,
+        company.website and len(company.website.strip()) > 0
+    ])
+    sections["company_details"] = details_complete
+    if details_complete:
+        total_score += 25
+    else:
+        if not company.industry:
+            missing_fields.append("industry")
+        if not company.type:
+            missing_fields.append("type")
+        if not company.location:
+            missing_fields.append("location")
+        if not company.website:
+            missing_fields.append("website")
+        next_steps.append("Add company details")
+
+    content_complete = all([
+        company.description and len(company.description.strip()) > 20,
+        company.logo_url and len(company.logo_url.strip()) > 0
+    ])
+    sections["profile_content"] = content_complete
+    if content_complete:
+        total_score += 20
+    else:
+        if not company.description or len(company.description.strip()) <= 20:
+            missing_fields.append("description")
+        if not company.logo_url:
+            missing_fields.append("logo_url")
+        next_steps.append("Upload logo and write description")
+    
+    # Social Media (15 points)
+    social_links = 0
+    if company.social and isinstance(company.social, dict):
+        social_links = sum(1 for link in company.social.values() 
+                          if link and isinstance(link, str) and len(link.strip()) > 0)
+    
+    social_complete = social_links >= 2
+    sections["social_presence"] = social_complete
+    if social_complete:
+        total_score += 15
+    else:
+        missing_fields.append("social_media_links")
+        next_steps.append("Add at least 2 social media links")
+    
+    # Tags & Benefits (15 points)
+    has_tags = company.tags and len(company.tags) >= 1
+    has_benefits = company.benefits and len(company.benefits) >= 1
+    additional_complete = has_tags and has_benefits
+    sections["additional_info"] = False if not additional_complete else True
+    if additional_complete:
+        total_score += 15
+    else:
+        if not has_tags:
+            missing_fields.append("tags")
+        if not has_benefits:
+            missing_fields.append("benefits")
+        next_steps.append("Add company tags and benefits")
+    
+    return {
+        "completion_percentage": total_score,
+        "sections": sections,
+        "missing_fields": missing_fields,
+        "next_steps": next_steps
+    }
 # ===== COMPANY USER ENDPOINTS =====
 @app.post("/companies/{company_id}/users/", response_model=CompanyUserDoc)
 async def create_company_user(

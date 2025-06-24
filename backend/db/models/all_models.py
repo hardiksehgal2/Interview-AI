@@ -131,6 +131,12 @@ class Company(CompanyBase, BaseDBModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
+class ProfileCompletionResponse(BaseModel):
+    completion_percentage: int
+    sections: Dict[str, bool]
+    missing_fields: List[str]
+    next_steps: List[str]
+
 # ===== COMPANY USER MODELS =====
 class CompanyUserBase(BaseModel):
     company_id: str
