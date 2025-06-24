@@ -30,6 +30,17 @@ class CompanyUserDoc(Document, CompanyUserBase):
             [("company_id", 1)],
         ]
 
+class ProfileCompletionDoc(Document):
+    company_id: str
+    completion_percentage: int
+    sections: Dict[str, bool]
+    missing_fields: List[str]
+    next_steps: List[str]
+    last_updated: datetime = datetime.utcnow()
+    
+    class Settings:
+        name = "profile_completions"
+
 class JobDescriptionDoc(Document, JobDescriptionBase):
     id: Optional[PydanticObjectId] = None
     company_id: PydanticObjectId
