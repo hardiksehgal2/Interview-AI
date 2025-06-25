@@ -222,7 +222,9 @@ async def list_companies(
     industry: Optional[str] = Query(None, description="Filter by industry"),
     size: Optional[str] = Query(None, description="Filter by company size"),
     location: Optional[str] = Query(None, description="Filter by location"),
-    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)")
+    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
+    has_jobs: Optional[bool] = Query(None, description="Filter companies with job openings"),
+    completed_profile: Optional[int] = Query(None, ge=0, le=100, description="Filter companies with completion >= this percentage")
 ):
     """List all companies with optional filters"""
     query = {}
@@ -242,8 +244,36 @@ async def list_companies(
         companies = await CompanyDoc.find(query).skip(skip).limit(limit).to_list()
     else:
         companies = await CompanyDoc.find_all().skip(skip).limit(limit).to_list()
+
+    filtered_companies = []
+
+    for company in companies:
+        company_id = str(company.id)
+        include_company = True
+
+        if has_jobs is not None:
+            job_count = await JobDescriptionDoc.find(JobDescriptionDoc.company_id == PydanticObjectId(company_id) and JobDescriptionDoc.is_active == True).count()
+            if has_jobs and job_count == 0:
+                include_company = False
+            elif not has_jobs and job_count > 0:
+                include_company = False
+
+        if completed_profile is not None and include_company:
+            completion_doc = await ProfileCompletionDoc.find_one(
+                ProfileCompletionDoc.company_id == company_id
+            )
+            
+            if completion_doc:
+                if completion_doc.completion_percentage < completed_profile:
+                    include_company = False
+            else:
+                if completed_profile > 0:
+                    include_company = False
+        
+        if include_company:
+            filtered_companies.append(company)
     
-    return companies
+    return filtered_companies
 
 @app.get("/companies/{company_id}/profile-completion", response_model=ProfileCompletionResponse)
 async def get_profile_completion(
@@ -365,7 +395,7 @@ def calculate_profile_completion(company: CompanyDoc) -> dict:
     ])
     sections["profile_content"] = content_complete
     if content_complete:
-        total_score += 20
+        total_score += 15
     else:
         if not company.description or len(company.description.strip()) <= 20:
             missing_fields.append("description")
@@ -393,14 +423,22 @@ def calculate_profile_completion(company: CompanyDoc) -> dict:
     additional_complete = has_tags and has_benefits
     sections["additional_info"] = False if not additional_complete else True
     if additional_complete:
-        total_score += 15
+        total_score += 10
     else:
         if not has_tags:
             missing_fields.append("tags")
         if not has_benefits:
             missing_fields.append("benefits")
         next_steps.append("Add company tags and benefits")
-    
+
+    is_verified = company.is_verified
+    sections["verification"] = is_verified
+    if is_verified:
+        total_score += 10
+    else:
+        missing_fields.append("verification")
+        next_steps.append("Complete verification process to unlock full profile")
+
     return {
         "completion_percentage": total_score,
         "sections": sections,
