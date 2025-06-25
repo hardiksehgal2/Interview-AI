@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional, List, Dict, Any, Union
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 import json
 
@@ -88,6 +88,7 @@ class CompanyBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
     secondary_email: Optional[str] = None
+    founded_date: Optional[date] = None
     size: Optional[str] = None
     type: Optional[str] = None
     industry: Optional[str] = None

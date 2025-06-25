@@ -137,13 +137,26 @@ const companySchema = z.object({
   size: z.string().min(1, "Company size must be at least 1"),
   type: z.string().min(1, "Company type cannot be empty"),
   industry: z.string().min(1, "Industry sector cannot be empty"),
-  location: z.string().min(1, "Location cannot be empty"),
+  location: z
+    .string({ required_error: "Location can't be null" })
+    .min(1, "Location cannot be empty"),
+
   website: z
     .string()
     .url("Please enter a valid URL")
     .optional()
     .or(z.literal("")),
-  phone: z.string().min(1, "Phone number cannot be empty"),
+  phone: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .refine(
+      (val) => val === undefined || val === "" || typeof val === "string",
+      {
+        message: "Invalid phone number",
+      }
+    ),
+
   description: z.string().min(1, "Company description cannot be empty"),
   logo_url: z.string().optional(),
   benefits: z.array(z.string()).optional(),
@@ -203,8 +216,9 @@ const FormField = ({
   isLoaded?: boolean;
 }) => (
   <div
-    className={`space-y-2 transform transition-all duration-500 ease-out ${isLoaded ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
-      }`}
+    className={`space-y-2 transform transition-all duration-500 ease-out ${
+      isLoaded ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+    }`}
     style={{ transitionDelay: `${delay}ms` }}
   >
     <label className="flex items-center text-sm font-semibold text-gray-700 mb-2">
@@ -411,8 +425,9 @@ const EditCompany: React.FC = () => {
       <div className="w-full mx-auto">
         {/* Header */}
         <div
-          className={`transform transition-all duration-700 ease-out mb-8 ${isLoaded ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
-            }`}
+          className={`transform transition-all duration-700 ease-out mb-8 ${
+            isLoaded ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+          }`}
         >
           <div className="flex items-center justify-between mb-6">
             <Button
@@ -494,8 +509,9 @@ const EditCompany: React.FC = () => {
 
         {/* Form Card */}
         <Card
-          className={`border-0 shadow-xl transform transition-all duration-700 ease-out ${isLoaded ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
-            }`}
+          className={`border-0 shadow-xl transform transition-all duration-700 ease-out ${
+            isLoaded ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+          }`}
           style={{ transitionDelay: "200ms" }}
         >
           <CardHeader className="border-b border-gray-100">
@@ -628,10 +644,11 @@ const EditCompany: React.FC = () => {
                       <PopoverTrigger asChild>
                         <button
                           type="button"
-                          className={`w-full h-11 flex items-center justify-between px-3 py-2 text-left border rounded-lg bg-white hover:bg-gray-50 transition-all duration-200 ${errors.location
-                            ? "border-red-500"
-                            : "border-gray-300"
-                            }`}
+                          className={`w-full h-11 flex items-center justify-between px-3 py-2 text-left border rounded-lg bg-white hover:bg-gray-50 transition-all duration-200 ${
+                            errors.location
+                              ? "border-red-500"
+                              : "border-gray-300"
+                          }`}
                         >
                           <span
                             className={
@@ -734,8 +751,9 @@ const EditCompany: React.FC = () => {
                         >
                           <span className="text-gray-500">
                             {selectedBenefits.length > 0
-                              ? `${selectedBenefits.length} benefit${selectedBenefits.length > 1 ? "s" : ""
-                              } selected`
+                              ? `${selectedBenefits.length} benefit${
+                                  selectedBenefits.length > 1 ? "s" : ""
+                                } selected`
                               : "Select benefits..."}
                           </span>
                           <ChevronDown className="h-4 w-4 text-gray-400" />
@@ -759,10 +777,11 @@ const EditCompany: React.FC = () => {
                                 className="cursor-pointer flex items-center space-x-2"
                               >
                                 <div
-                                  className={`w-4 h-4 border-2 rounded flex items-center justify-center ${selectedBenefits.includes(benefit)
-                                    ? "bg-indigo-600 border-indigo-600"
-                                    : "border-gray-300"
-                                    }`}
+                                  className={`w-4 h-4 border-2 rounded flex items-center justify-center ${
+                                    selectedBenefits.includes(benefit)
+                                      ? "bg-indigo-600 border-indigo-600"
+                                      : "border-gray-300"
+                                  }`}
                                 >
                                   {selectedBenefits.includes(benefit) && (
                                     <Check className="w-3 h-3 text-white" />
@@ -817,8 +836,9 @@ const EditCompany: React.FC = () => {
                         >
                           <span className="text-gray-500">
                             {selectedTags.length > 0
-                              ? `${selectedTags.length}/5 tag${selectedTags.length > 1 ? "s" : ""
-                              } selected`
+                              ? `${selectedTags.length}/5 tag${
+                                  selectedTags.length > 1 ? "s" : ""
+                                } selected`
                               : "Select up to 5 tags..."}
                           </span>
                           <ChevronDown className="h-4 w-4 text-gray-400" />
@@ -846,17 +866,19 @@ const EditCompany: React.FC = () => {
                                   onSelect={() =>
                                     !isDisabled && handleTagSelect(tag)
                                   }
-                                  className={`cursor-pointer flex items-center space-x-2 ${isDisabled
-                                    ? "opacity-50 cursor-not-allowed"
-                                    : ""
-                                    }`}
+                                  className={`cursor-pointer flex items-center space-x-2 ${
+                                    isDisabled
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : ""
+                                  }`}
                                   disabled={isDisabled}
                                 >
                                   <div
-                                    className={`w-4 h-4 border-2 rounded flex items-center justify-center ${isSelected
-                                      ? "bg-blue-600 border-blue-600"
-                                      : "border-gray-300"
-                                      }`}
+                                    className={`w-4 h-4 border-2 rounded flex items-center justify-center ${
+                                      isSelected
+                                        ? "bg-blue-600 border-blue-600"
+                                        : "border-gray-300"
+                                    }`}
                                   >
                                     {isSelected && (
                                       <Check className="w-3 h-3 text-white" />
@@ -918,8 +940,8 @@ const EditCompany: React.FC = () => {
                     const fieldError = errors.social?.[platform.value];
                     const errorMessage =
                       fieldError &&
-                        typeof fieldError === "object" &&
-                        "message" in fieldError
+                      typeof fieldError === "object" &&
+                      "message" in fieldError
                         ? fieldError.message
                         : undefined;
 
@@ -960,10 +982,11 @@ const EditCompany: React.FC = () => {
               </div>
               {/* Submit Button */}
               <div
-                className={`flex justify-end pt-6 border-t border-gray-100 transform transition-all duration-500 ease-out ${isLoaded
-                  ? "translate-y-0 opacity-100"
-                  : "translate-y-4 opacity-0"
-                  }`}
+                className={`flex justify-end pt-6 border-t border-gray-100 transform transition-all duration-500 ease-out ${
+                  isLoaded
+                    ? "translate-y-0 opacity-100"
+                    : "translate-y-4 opacity-0"
+                }`}
                 style={{ transitionDelay: "800ms" }}
               >
                 <Button

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 import React, { useState } from "react";
+import citiesData from "@/data/cities.json";
 import {
   Eye,
   EyeOff,
@@ -10,12 +11,24 @@ import {
   FileText,
   Shield,
   CheckCircle,
+  LocationEdit,
 } from "lucide-react";
 import AxiosInstances from "@/services/AxiosInstance";
 import { damp } from "three/src/math/MathUtils.js";
 import toast, { Toaster } from "react-hot-toast";
 import { useRouter } from "next/navigation";
-
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
 interface FormData {
   name: string;
   description: string;
@@ -25,6 +38,8 @@ interface FormData {
   type: string;
   password: string;
   confirmPassword: string;
+  foundedDate: string;
+  location: string;
 }
 
 interface FormErrors {
@@ -36,12 +51,21 @@ interface FormErrors {
   type?: string;
   password?: string;
   confirmPassword?: string;
+  foundedDate?: string;
+  location?: string;
+}
+interface City {
+  id: string;
+  name: string;
+  state: string;
 }
 
 const Register = () => {
   const [formData, setFormData] = useState<FormData>({
     name: "",
     description: "",
+    foundedDate: "",
+    location: "",
     size: "",
     email: "",
     industry: "",
@@ -50,7 +74,8 @@ const Register = () => {
     confirmPassword: "",
   });
   const router = useRouter();
-
+  const [isCityOpen, setIsCityOpen] = useState(false);
+  const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -80,7 +105,14 @@ const Register = () => {
     { value: "service", label: "Service-based" },
     { value: "both", label: "Both Product & Service" },
   ];
-
+  const handleCitySelect = (city: City) => {
+    setSelectedCity(city);
+    setIsCityOpen(false);
+    setFormData((prev) => ({
+      ...prev,
+      location: `${city.name}, ${city.state}`,
+    }));
+  };
   const validateForm = () => {
     const newErrors: FormErrors = {};
 
@@ -89,7 +121,14 @@ const Register = () => {
     } else if (formData.name.length > 200) {
       newErrors.name = "Company name must be less than 200 characters";
     }
-
+    if (!formData.location.trim()) {
+      newErrors.location = "Location is required";
+    }
+    if (!formData.foundedDate) {
+      newErrors.foundedDate = "Founded date is required";
+    } else if (isNaN(Date.parse(formData.foundedDate))) {
+      newErrors.foundedDate = "Please enter a valid date";
+    }
     if (!formData.description.trim()) {
       newErrors.description = "Company description is required";
     } else if (formData.description.length < 10) {
@@ -186,6 +225,8 @@ const Register = () => {
         type: "",
         password: "",
         confirmPassword: "",
+        foundedDate: "",
+        location: "",
       });
     } catch (error) {
       console.error("Registration failed:", error);
@@ -281,6 +322,102 @@ const Register = () => {
               {errors.email && (
                 <p className="mt-1 text-xs sm:text-sm text-red-600">
                   {errors.email}
+                </p>
+              )}
+            </div>
+            {/* Founded Date */}
+            <div>
+              <label
+                htmlFor="foundedDate"
+                className="block text-sm font-semibold text-gray-700 mb-2"
+              >
+                Founded Date *
+              </label>
+              <div className="relative">
+                <input
+                  type="date"
+                  id="foundedDate"
+                  name="foundedDate"
+                  value={formData.foundedDate}
+                  onChange={handleInputChange}
+                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border rounded-lg appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+                    errors.foundedDate ? "border-red-500" : "border-gray-300"
+                  }`}
+                />
+              </div>
+              {errors.foundedDate && (
+                <p className="mt-1 text-xs sm:text-sm text-red-600">
+                  {errors.foundedDate}
+                </p>
+              )}
+            </div>
+
+            {/* Location */}
+            <div>
+              <label
+                htmlFor="location"
+                className="block text-sm font-semibold text-gray-700 mb-2"
+              >
+                Location *
+              </label>
+
+              <div className="relative">
+              <LocationEdit className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                <Popover open={isCityOpen} onOpenChange={setIsCityOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className={`w-full pl-10 pr-4 py-2.5 sm:py-3 text-sm sm:text-base text-left border rounded-lg appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+                        errors.location ? "border-red-500" : "border-gray-300"
+                      } bg-white`}
+                    >
+                      {selectedCity
+                        ? `${selectedCity.name}, ${selectedCity.state}`
+                        : "Select a city..."}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <div className="flex items-center border-b px-3">
+                        <CommandInput
+                          placeholder="Search cities..."
+                          className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      </div>
+                      <CommandEmpty>No city found.</CommandEmpty>
+                      <CommandGroup className="max-h-64 overflow-auto">
+                        {citiesData.map((city: City) => (
+                          <CommandItem
+                            key={city.id}
+                            value={city.name}
+                            onSelect={() => handleCitySelect(city)}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium">{city.name}</span>
+                              <span className="text-sm text-gray-500">
+                                {city.state}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Hidden input to submit city string */}
+                <input
+                  type="hidden"
+                  id="location"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleInputChange}
+                />
+              </div>
+              {errors.location && (
+                <p className="mt-1 text-xs sm:text-sm text-red-600">
+                  {errors.location}
                 </p>
               )}
             </div>
