@@ -175,7 +175,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
           </div>
         ) : (
           // Upload Mode
-          <div className="aspect-video max-h-48 flex flex-col items-center justify-center p-6 text-center">
+          <div className="aspect-video max-h-48 flex flex-col items-center justify-center p-6 pl-16 text-center">
             {isUploading ? (
               <div className="flex flex-col items-center space-y-3">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -189,11 +189,11 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
                 `}>
                   <ImageIcon className={`w-6 h-6 ${isDragOver ? 'text-blue-600' : 'text-gray-400'}`} />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 ">
                   <p className={`text-sm font-medium ${isDragOver ? 'text-blue-600' : 'text-gray-700'}`}>
                     {isDragOver ? 'Drop image here' : 'Upload company logo'}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 ">
                     Drag & drop or click to browse
                   </p>
                   <p className="text-xs text-gray-400">

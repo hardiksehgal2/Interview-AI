@@ -99,7 +99,7 @@ const ViewProfile = () => {
     if (size <= 10) return `Small (${size} employees)`;
     if (size <= 50) return `Medium (${size} employees)`;
     if (size <= 250) return `Large (${size} employees)`;
-    return `Enterprise (${size}+ employees)`;
+    return `${size}+ employees`;
   };
 
   if (loading) {

@@ -26,7 +26,7 @@ import Link from "next/link";
 interface CompanyData {
   name: string;
   email: string;
-  size: number;
+  size: string;
   type: string;
   industry: string;
   location: string;
@@ -307,8 +307,8 @@ const Companies = () => {
                         <div className="flex items-center text-sm text-gray-500">
                           <Users className="w-4 h-4 mr-2" />
                           <span>
-                            {company.size} employees •{" "}
-                            {getCompanySizeLabel(company.size)}
+                            {company.size} employees 
+                            {/* {getCompanySizeLabel(company)} */}
                           </span>
                         </div>
                         {company.website && (
@@ -328,7 +328,7 @@ const Companies = () => {
                         <Button
                           size="sm"
                           onClick={()=>handleApply(company._id)}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white group-hover:shadow-md transition-all"
+                          className="bg-indigo-600 hover:bg-indigo-700 cursor-pointer text-white group-hover:shadow-md transition-all"
                         >
                           View Details
                           <ArrowRight className="w-3 h-3 ml-1 group-hover:translate-x-1 transition-transform" />

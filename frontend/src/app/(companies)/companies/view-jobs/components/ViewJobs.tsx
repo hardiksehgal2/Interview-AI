@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Target } from "lucide-react";
+import ShimmerJobCard from "@/components/shimmer/ShimmerJobCard";
 
 // Define job interface
 interface Job {
@@ -66,7 +67,7 @@ export function ViewJobs() {
   // Get company_id and job_id from query parameters
   const companyId = searchParams.get("company_id");
   const jobId = searchParams.get("job_id");
-  
+
   const [interviewId, setInterviewId] = useState<string | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -301,11 +302,7 @@ export function ViewJobs() {
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p className="text-lg">Loading job details...</p>
-      </div>
-    );
+    return <ShimmerJobCard />;
   }
 
   if (error || !job) {
@@ -313,7 +310,9 @@ export function ViewJobs() {
       <div className="flex flex-col justify-center items-center min-h-screen gap-4">
         <p className="text-lg text-red-600">{error || "Job not found"}</p>
         <button
-          onClick={() => router.push(`/companies/view-profile?company_id=${companyId}`)}
+          onClick={() =>
+            router.push(`/companies/view-profile?company_id=${companyId}`)
+          }
           className="px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition-colors"
         >
           Back to Company Profile
@@ -321,13 +320,34 @@ export function ViewJobs() {
       </div>
     );
   }
+  const formatSalary = (
+    min: number | null | undefined,
+    max: number | null | undefined
+  ): string => {
+    const formatNumber = (num: number): string => {
+      if (num >= 100000) {
+        return `${(num / 100000).toFixed(1)}L`;
+      }
+      if (num >= 1000) {
+        return `${(num / 1000).toFixed(0)}K`;
+      }
+      return num.toString();
+    };
 
+    if (min == null || max == null) {
+      return "Not Disclosed";
+    }
+
+    return `${formatNumber(min)} - ${formatNumber(max)}`;
+  };
   return (
     <div className="w-full mx-auto px-8 lg:px-16 py-8">
       <Toaster position="top-right" reverseOrder={false} />
       {/* Back button */}
       <button
-        onClick={() => router.push(`/companies/view-profile?company_id=${companyId}`)}
+        onClick={() =>
+          router.push(`/companies/view-profile?company_id=${companyId}`)
+        }
         className="mb-6 flex items-center cursor-pointer text-indigo-600 hover:text-indigo-800 transition-colors"
       >
         <svg
@@ -430,8 +450,7 @@ export function ViewJobs() {
                 strokeLinejoin="round"
               />
             </svg>
-            {job.salary_min.toLocaleString()} -{" "}
-            {job.salary_max.toLocaleString()}
+            {formatSalary(job.salary_min, job.salary_max)}
           </div>
         </div>
       </div>
@@ -457,7 +476,7 @@ export function ViewJobs() {
               .map((skill, index) => (
                 <span
                   key={index}
-                  className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200"
+                  className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-50 text-indigo-700 border border-indigo-200"
                 >
                   {skill}
                 </span>
@@ -498,25 +517,25 @@ export function ViewJobs() {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Additional Information
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex justify-between">
-              <span className="font-medium text-gray-600">Openings:</span>
-              <span className="text-gray-900">{job.openings}</span>
+          <div className="space-y-5 gap-4">
+            <div className="flex justify-start space-x-2">
+              <span className="text-black font-bold">Openings:</span>
+              <span className="text-gray-900 ">{job.openings}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="font-medium text-gray-600">Difficulty:</span>
+            <div className="flex justify-start space-x-2">
+              <span className="text-black font-bold">Difficulty:</span>
               <span className="text-gray-900 capitalize">{job.difficulty}</span>
             </div>
             {job.perks && (
-              <div className="flex justify-between">
-                <span className="font-medium text-gray-600">Perks:</span>
+              <div className="flex justify-start space-x-2">
+                <span className="text-black font-bold">Perks:</span>
                 <span className="text-gray-900">{job.perks}</span>
               </div>
             )}
-            <div className="flex justify-between">
-              <span className="font-medium text-gray-600">Status:</span>
+            <div className="flex justify-start space-x-2">
+              <span className="text-black font-bold">Status:</span>
               <span
-                className={`px-2 py-1 rounded-full text-xs font-medium ${
+                className={`px-2 py-1 h-8 rounded-lg text-xs font-medium ${
                   job.is_active
                     ? "bg-green-100 text-green-800"
                     : "bg-red-100 text-red-800"
@@ -675,8 +694,8 @@ export function ViewJobs() {
           <DialogContent className="sm:max-w-lg max-h-lg h-full overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Target className="w-4 h-4 text-blue-600" />
+                <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                  <Target className="w-4 h-4 text-indigo-600" />
                 </div>
                 Interview Guidelines & Process
               </DialogTitle>
@@ -750,14 +769,14 @@ export function ViewJobs() {
                 </ul>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-                <p className="text-sm text-blue-700">
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-center">
+                <p className="text-sm text-indigo-700">
                   <strong>Your Interview ID:</strong>{" "}
-                  <span className="font-mono bg-blue-100 px-2 py-1 rounded">
+                  <span className="font-mono bg-indigo-100 px-2 py-1 rounded">
                     {interviewId}
                   </span>
                 </p>
-                <p className="text-xs text-blue-600 mt-1">
+                <p className="text-xs text-indigo-600 mt-1">
                   Save this ID to access your interview summary later
                 </p>
               </div>
