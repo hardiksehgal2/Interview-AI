@@ -31,7 +31,7 @@ export const AnimatedTestimonials = ({
     if (!autoplay) return;
     const id = setInterval(handleNext, 5_000);
     return () => clearInterval(id);
-  }, [autoplay]);
+  }, [autoplay, handleNext]);
 
   // simple helper to vary the “fanned-out” rotation of the cards
   const randomRotateY = () => Math.floor(Math.random() * 21) - 10;

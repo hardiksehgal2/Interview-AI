@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 // pages/index.tsx - Complete Next.js frontend with warning systems
 "use client"
 import React, { useState, useEffect, useRef } from 'react';

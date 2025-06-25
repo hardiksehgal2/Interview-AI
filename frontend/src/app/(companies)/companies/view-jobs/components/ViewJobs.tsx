@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react/no-unescaped-entities */
 // frontend\src\app\(companies)\companies\view-jobs\page.tsx
-"use client";
+// "use client";
 import { useRouter } from "next/navigation";
 
 import { useState, useEffect } from "react";
