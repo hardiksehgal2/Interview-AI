@@ -1,7 +1,7 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-require-imports */
 'use client';
 
 import { useState, useEffect, useRef, Suspense } from 'react';
@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { Mic, Bot, Camera, Users, TrendingUp, Wifi, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { DialogOverlay } from '@/components/ui/dialog';
+import { useSearchParams } from 'next/navigation';
 
 // Interview-related interfaces
 interface Message {
@@ -77,7 +78,6 @@ function MicIndicator({
 }
 
 function InterviewContent() {
-    const { useSearchParams } = require('next/navigation');
 
     const router = useRouter();
     const searchParams = useSearchParams();

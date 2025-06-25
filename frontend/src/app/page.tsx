@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 import Intro from "@/components/landing/Intro";
 import { NavbarDemo } from "@/components/NavbarMain";
